@@ -1,0 +1,101 @@
+# PromptLineAI – Cursor Rules (Extension POC)
+
+## 1) Scope & Change Control
+- Do not add features beyond the explicit request.
+- Do not refactor unrelated code or “clean up” without asking.
+- Keep diffs minimal and targeted.
+- Do not change the event schema unless explicitly requested. Propose changes first.
+
+## 2) Dependencies & Upgrades
+- Do not add new dependencies unless absolutely necessary.
+- Prefer built-in Web APIs and small utilities over libraries.
+- Do not upgrade Node, TypeScript, esbuild, or any dependency without approval.
+- If a dependency is required, justify it briefly.
+- Do not regenerate `pnpm-lock.yaml` unless dependencies change.
+
+## 3) Chrome Extension Constraints
+- Must target **Manifest V3** only.
+- Chromium browsers only (Chrome first). No Firefox/Safari work unless requested.
+- Request the minimum permissions required. Explain any new permission.
+- Avoid fragile DOM selectors; use MutationObserver and fallback strategies.
+- Never capture or store prompt content or file content. Metadata only.
+
+## 4) Security & Privacy
+- Never store secrets in the extension (no API keys, tokens, or passwords).
+- Treat all extension code as public and inspectable.
+- Do not log sensitive data (no prompt text, no file contents).
+- Default to `DRY_RUN=true`. Do not send data externally by default.
+- All network requests must be explicit and configurable.
+
+## 5) Code Quality
+- Use strict TypeScript. Avoid `any`.
+- Keep modules small and single-purpose.
+- Use clear, descriptive naming. Avoid clever abstractions.
+- All site-specific logic must live in `src/adapters/<tool>.ts`.
+- Core pipeline must remain: `content → background → queue → sender`.
+- Handle errors explicitly. Do not swallow errors.
+
+## 6) Data Integrity & Robustness
+- Generate a UUID per event.
+- Persist the event queue in `chrome.storage.local`.
+- Implement retry with backoff; avoid infinite loops.
+- Enforce a max queue size and drop oldest events if needed (log once).
+- Batch sends (max 50 events). Never send per-event requests.
+
+## 7) Performance
+- Do not degrade host page performance.
+- Use MutationObserver carefully; debounce processing and disconnect when stable.
+- Avoid polling loops in content scripts.
+- Keep service worker memory usage low; rely on storage.
+
+## 8) Formatting
+- Follow consistent formatting:
+  - 2-space indentation
+  - single quotes where reasonable
+  - trailing commas where valid
+  - no semicolons unless required
+- Keep line length ~100 characters.
+- Do not add heavy linting/formatting tooling unless requested.
+
+## 9) Build & Packaging (esbuild)
+- Build outputs must go to `/dist`.
+- Do not change the build system (esbuild) unless requested.
+- Ensure `manifest.json` and static assets are copied to `/dist`.
+- No source maps in production builds unless requested.
+- Keep build scripts simple and deterministic.
+
+## 10) Logging & Debugging
+- Prefix logs with `[PromptLineAI]`.
+- Gate verbose logs behind a `DEBUG` flag.
+- Background logs may include queue size and flush results only.
+- Content script logs should confirm adapter init and event detection, not spam.
+
+## 11) Popup UI (Optional)
+- Popup is minimal and optional.
+- No additional permissions for popup.
+- Read-only view of recent events from storage.
+- No frameworks unless explicitly requested.
+
+## 12) Testing (POC-Level)
+- No heavy test frameworks required.
+- If tests exist, limit to core utilities (queue, validation).
+- Prefer runtime validation and defensive coding.
+
+## 13) Documentation
+- Update README only when behavior or setup changes.
+- README must clearly state:
+  - supported domains
+  - events collected
+  - what is NOT collected
+  - how to load unpacked extension
+  - where to see logs
+
+## Stop-and-Ask Triggers
+If any of the following are needed, stop and ask before implementing:
+- New permissions
+- Capturing any content beyond metadata
+- Adding dependencies
+- Changing the event schema
+- Adding auth or credential handling
+- Expanding to additional AI tools
+

@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "PromptLineAI Extension",
+  "version": "0.1.0",
+  "description": "Detect AI tool usage events on ChatGPT",
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "https://chat.openai.com/*",
+    "https://chatgpt.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://chat.openai.com/*",
+        "https://chatgpt.com/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  }
+}

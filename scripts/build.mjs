@@ -1,0 +1,93 @@
+import { build, context } from "esbuild";
+import { readdir, copyFile, mkdir } from "fs/promises";
+import { join, dirname } from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const rootDir = join(__dirname, "..");
+const distDir = join(rootDir, "dist");
+const publicDir = join(rootDir, "public");
+const srcDir = join(rootDir, "src");
+
+const isWatch = process.argv.includes("--watch");
+
+async function copyPublicAssets() {
+  // Copy manifest.json
+  await copyFile(join(publicDir, "manifest.json"), join(distDir, "manifest.json"));
+  console.log("✓ Copied manifest.json");
+
+  // Copy popup.html
+  await copyFile(join(publicDir, "popup.html"), join(distDir, "popup.html"));
+  console.log("✓ Copied popup.html");
+
+  // Copy icons if they exist
+  try {
+    const iconsDir = join(publicDir, "icons");
+    const files = await readdir(iconsDir);
+    const distIconsDir = join(distDir, "icons");
+    await mkdir(distIconsDir, { recursive: true });
+    for (const file of files) {
+      await copyFile(join(iconsDir, file), join(distIconsDir, file));
+    }
+    console.log("✓ Copied icons");
+  } catch (err) {
+    // Icons directory doesn't exist, that's fine
+  }
+}
+
+// Base config - use ESM format for all scripts (content, background, popup)
+const baseConfig = {
+  bundle: true,
+  outdir: distDir,
+  format: "esm",
+  platform: "browser",
+  target: "es2020",
+  sourcemap: isWatch,
+  minify: !isWatch,
+  logLevel: "info",
+};
+
+const buildConfig = {
+  ...baseConfig,
+  entryPoints: {
+    "background": join(srcDir, "background.ts"),
+    "content": join(srcDir, "content.ts"),
+    "popup": join(srcDir, "popup.ts"),
+  },
+};
+
+async function buildExtension() {
+  console.log("Building extension...");
+  await mkdir(distDir, { recursive: true });
+
+  if (isWatch) {
+    // Use context API for watch mode
+    const ctx = await context(buildConfig);
+    
+    // Initial build and copy assets
+    await ctx.rebuild();
+    await copyPublicAssets();
+    console.log("✓ Initial build complete");
+    
+    // Start watching (rebuilds happen automatically)
+    await ctx.watch();
+    console.log("✓ Watching for changes... (assets copied once at startup)");
+    
+    // Keep process alive
+    process.on("SIGINT", async () => {
+      await ctx.dispose();
+      process.exit(0);
+    });
+  } else {
+    // Regular one-off build
+    await build(buildConfig);
+    await copyPublicAssets();
+    console.log("✓ Build complete");
+  }
+}
+
+buildExtension().catch((err) => {
+  console.error("Build error:", err);
+  process.exit(1);
+});

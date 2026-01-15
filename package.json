@@ -1,0 +1,22 @@
+{
+  "name": "promptlineai-extension",
+  "version": "0.1.0",
+  "description": "Chrome extension to detect AI tool usage events",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "dev": "node scripts/build.mjs --watch"
+  },
+  "keywords": [
+    "chrome-extension",
+    "ai",
+    "chatgpt"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/chrome": "^0.0.268",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.6.3"
+  }
+}
