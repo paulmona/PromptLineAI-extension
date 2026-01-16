@@ -3,6 +3,20 @@ import { generateUUID } from "./lib/uuid";
 import { logger } from "./lib/logger";
 import { initChatGPT } from "./adapters/chatgpt";
 
+/**
+ * Check if chrome.runtime is still valid (extension context not invalidated)
+ */
+function isRuntimeValid(): boolean {
+  try {
+    const chromeApi = (window as any).chrome || (globalThis as any).chrome;
+    return chromeApi && 
+           chromeApi.runtime && 
+           chromeApi.runtime.id !== undefined;
+  } catch {
+    return false;
+  }
+}
+
 // Determine tool based on hostname
 function getTool(hostname: string): Tool {
   if (hostname.includes("chat.openai.com") || hostname.includes("chatgpt.com")) {
@@ -14,7 +28,7 @@ function getTool(hostname: string): Tool {
 // Create and send event
 function createEvent(
   eventType: "visit" | "prompt_submit" | "file_selected",
-  metadata?: { file_ext?: string; file_size_kb?: number }
+  metadata?: { file_ext?: string; file_size_kb?: number; file_name?: string }
 ): void {
   const tool = getTool(window.location.hostname);
   if (tool === "unknown") {
@@ -30,17 +44,32 @@ function createEvent(
     url_host: window.location.hostname,
     file_ext: metadata?.file_ext || null,
     file_size_kb: metadata?.file_size_kb || null,
+    file_name: metadata?.file_name || null,
   };
 
   logger.log("content", "Sending event:", event);
+  
+  // Check if extension context is still valid before sending
+  if (!isRuntimeValid()) {
+    logger.warn("content", "Extension context invalidated - cannot send event. Extension may have been reloaded.");
+    return;
+  }
+  
   // Access chrome API - use window.chrome to ensure it's available after bundling
   const chromeApi = (window as any).chrome || (globalThis as any).chrome;
   if (!chromeApi || !chromeApi.runtime) {
     logger.error("content", "Chrome runtime API not available");
     return;
   }
-  chromeApi.runtime.sendMessage({ type: "event", event }).catch((err) => {
-    logger.error("content", "Failed to send event:", err);
+  
+  chromeApi.runtime.sendMessage({ type: "event", event }).catch((err: unknown) => {
+    // Check if error is due to invalidated context
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    if (errorMessage.includes("Extension context invalidated") || errorMessage.includes("message port closed")) {
+      logger.warn("content", "Extension context invalidated - extension may have been reloaded");
+    } else {
+      logger.error("content", "Failed to send event:", err);
+    }
   });
 }
 

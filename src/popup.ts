@@ -26,11 +26,24 @@ async function render(): Promise<void> {
         const details: string[] = [];
         details.push(`Tool: ${event.tool}`);
         details.push(`Host: ${event.url_host}`);
-        if (event.file_ext) {
-          details.push(`File: .${event.file_ext}`);
-        }
-        if (event.file_size_kb !== null && event.file_size_kb !== undefined) {
-          details.push(`Size: ${event.file_size_kb} KB`);
+        // For file_selected events, show file name prominently
+        if (event.event_type === "file_selected") {
+          if (event.file_name) {
+            details.push(`File: ${event.file_name}`);
+          } else if (event.file_ext) {
+            details.push(`File: .${event.file_ext}`);
+          }
+          if (event.file_size_kb !== null && event.file_size_kb !== undefined) {
+            details.push(`Size: ${event.file_size_kb} KB`);
+          }
+        } else {
+          // For other events, show file info if present (shouldn't happen, but keep for consistency)
+          if (event.file_ext) {
+            details.push(`File: .${event.file_ext}`);
+          }
+          if (event.file_size_kb !== null && event.file_size_kb !== undefined) {
+            details.push(`Size: ${event.file_size_kb} KB`);
+          }
         }
 
         return `

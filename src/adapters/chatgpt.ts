@@ -1,7 +1,7 @@
 import { EventType } from "../types";
 import { logger } from "../lib/logger";
 
-export type EventCallback = (eventType: EventType, metadata?: { file_ext?: string; file_size_kb?: number }) => void;
+export type EventCallback = (eventType: EventType, metadata?: { file_ext?: string; file_size_kb?: number; file_name?: string }) => void;
 
 /**
  * Initialize ChatGPT adapter
@@ -14,6 +14,8 @@ export function initChatGPT(onEvent: EventCallback): void {
   let sendButton: HTMLElement | null = null;
   // Support both textarea and contenteditable div for prompt input
   let promptInput: HTMLElement | null = null;
+  // Track file inputs that already have listeners to prevent duplicates
+  const fileInputsWithListeners = new WeakSet<HTMLInputElement>();
 
   /**
    * Check if an element is still valid (exists, in DOM, and visible)
@@ -131,17 +133,22 @@ export function initChatGPT(onEvent: EventCallback): void {
     // Find all file inputs
     const fileInputs = document.querySelectorAll('input[type="file"]');
     fileInputs.forEach((input) => {
-      input.addEventListener("change", (e) => {
-        const target = e.target as HTMLInputElement;
-        const files = target.files;
-        if (files && files.length > 0) {
-          const file = files[0];
-          const fileExt = file.name.split(".").pop() || null;
-          const fileSizeKb = Math.round(file.size / 1024);
-          logger.log("chatgpt-adapter", "File selected:", file.name, fileSizeKb, "KB");
-          onEvent("file_selected", { file_ext: fileExt || undefined, file_size_kb: fileSizeKb });
-        }
-      });
+      // Only attach listener if we haven't already attached one to this input
+      if (!fileInputsWithListeners.has(input)) {
+        fileInputsWithListeners.add(input);
+        
+        input.addEventListener("change", (e) => {
+          const target = e.target as HTMLInputElement;
+          const files = target.files;
+          if (files && files.length > 0) {
+            const file = files[0];
+            const fileExt = file.name.split(".").pop() || null;
+            const fileSizeKb = Math.round(file.size / 1024);
+            logger.log("chatgpt-adapter", "File selected:", file.name, fileSizeKb, "KB");
+            onEvent("file_selected", { file_ext: fileExt || undefined, file_size_kb: fileSizeKb, file_name: file.name });
+          }
+        });
+      }
     });
   }
 

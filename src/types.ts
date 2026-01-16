@@ -9,6 +9,7 @@ export interface Event {
   url_host: string;
   file_ext?: string | null;
   file_size_kb?: number | null;
+  file_name?: string | null;
 }
 
 export interface QueuePayload {
