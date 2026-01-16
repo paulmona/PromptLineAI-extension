@@ -29,7 +29,8 @@ async function render(): Promise<void> {
         
         // For prompt_submit events, show prompt metadata
         if (event.event_type === "prompt_submit") {
-          if (event.prompt_len_bucket) {
+          // Explicit check to ensure all bucket values including "1000+" are displayed
+          if (event.prompt_len_bucket != null && event.prompt_len_bucket !== "") {
             details.push(`Prompt size: ${event.prompt_len_bucket}`);
           }
           if (event.has_code_block === true) {
