@@ -26,8 +26,21 @@ async function render(): Promise<void> {
         const details: string[] = [];
         details.push(`Tool: ${event.tool}`);
         details.push(`Host: ${event.url_host}`);
+        
+        // For prompt_submit events, show prompt metadata
+        if (event.event_type === "prompt_submit") {
+          if (event.prompt_len_bucket) {
+            details.push(`Prompt size: ${event.prompt_len_bucket}`);
+          }
+          if (event.has_code_block === true) {
+            details.push(`Code block: Yes`);
+          }
+          if (event.paste_detected === true) {
+            details.push(`Paste detected: Yes`);
+          }
+        }
         // For file_selected events, show file name prominently
-        if (event.event_type === "file_selected") {
+        else if (event.event_type === "file_selected") {
           if (event.file_name) {
             details.push(`File: ${event.file_name}`);
           } else if (event.file_ext) {
