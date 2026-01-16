@@ -28,7 +28,14 @@ function getTool(hostname: string): Tool {
 // Create and send event
 function createEvent(
   eventType: "visit" | "prompt_submit" | "file_selected",
-  metadata?: { file_ext?: string; file_size_kb?: number; file_name?: string }
+  metadata?: {
+    file_ext?: string;
+    file_size_kb?: number;
+    file_name?: string;
+    prompt_len_bucket?: string;
+    has_code_block?: boolean;
+    paste_detected?: boolean;
+  }
 ): void {
   const tool = getTool(window.location.hostname);
   if (tool === "unknown") {
@@ -45,6 +52,9 @@ function createEvent(
     file_ext: metadata?.file_ext || null,
     file_size_kb: metadata?.file_size_kb || null,
     file_name: metadata?.file_name || null,
+    prompt_len_bucket: metadata?.prompt_len_bucket || null,
+    has_code_block: metadata?.has_code_block ?? null,
+    paste_detected: metadata?.paste_detected ?? null,
   };
 
   logger.log("content", "Sending event:", event);

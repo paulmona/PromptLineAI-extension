@@ -1,7 +1,17 @@
 import { EventType } from "../types";
 import { logger } from "../lib/logger";
 
-export type EventCallback = (eventType: EventType, metadata?: { file_ext?: string; file_size_kb?: number; file_name?: string }) => void;
+export type EventCallback = (
+  eventType: EventType,
+  metadata?: {
+    file_ext?: string;
+    file_size_kb?: number;
+    file_name?: string;
+    prompt_len_bucket?: string;
+    has_code_block?: boolean;
+    paste_detected?: boolean;
+  }
+) => void;
 
 /**
  * Initialize ChatGPT adapter
@@ -16,6 +26,9 @@ export function initChatGPT(onEvent: EventCallback): void {
   let promptInput: HTMLElement | null = null;
   // Track file inputs that already have listeners to prevent duplicates
   const fileInputsWithListeners = new WeakSet<HTMLInputElement>();
+  // Track paste events for paste detection
+  let lastPasteTime: number = 0;
+  const PASTE_DETECTION_WINDOW_MS = 5000; // 5 seconds
 
   /**
    * Check if an element is still valid (exists, in DOM, and visible)
@@ -27,6 +40,75 @@ export function initChatGPT(onEvent: EventCallback): void {
     // Check if element is visible (offsetParent is null for hidden elements)
     if (element.offsetParent === null && element.offsetHeight === 0) return false;
     return true;
+  }
+
+  /**
+   * Bucket prompt length into categories
+   */
+  function getPromptLengthBucket(text: string): string {
+    const len = text.length;
+    if (len <= 200) return "0-200";
+    if (len <= 1000) return "200-1000";
+    return "1000+";
+  }
+
+  /**
+   * Detect if prompt contains code blocks (DOM-based heuristic)
+   */
+  function detectCodeBlock(element: HTMLElement): boolean {
+    if (!element) return false;
+
+    // For textarea, check text content
+    if (element.tagName.toLowerCase() === "textarea") {
+      const text = (element as HTMLTextAreaElement).value;
+      // Check for backticks (common in markdown code blocks)
+      if (text.includes("```") || text.includes("`")) {
+        return true;
+      }
+      // Check for common code patterns
+      if (text.match(/\b(function|const|let|var|class|import|export|def|return|if|for|while)\b/)) {
+        return true;
+      }
+    }
+
+    // For contenteditable div, check DOM structure
+    if (element.contentEditable === "true") {
+      // Check for <code> or <pre> elements
+      const codeElements = element.querySelectorAll("code, pre");
+      if (codeElements.length > 0) {
+        return true;
+      }
+      // Check text content for backticks
+      const text = element.textContent || element.innerText || "";
+      if (text.includes("```") || text.includes("`")) {
+        return true;
+      }
+      // Check for code-like formatting (monospace font, etc.)
+      const computedStyle = window.getComputedStyle(element);
+      const fontFamily = computedStyle.fontFamily.toLowerCase();
+      if (fontFamily.includes("monospace") || fontFamily.includes("courier")) {
+        // Additional check: if it's a small portion, might be code
+        const text = element.textContent || "";
+        if (text.length > 50 && text.match(/\b(function|const|let|var|class|import|export)\b/)) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Get prompt text from element (without storing it)
+   */
+  function getPromptText(element: HTMLElement): string {
+    if (element.tagName.toLowerCase() === "textarea") {
+      return (element as HTMLTextAreaElement).value;
+    }
+    if (element.contentEditable === "true") {
+      return element.textContent || element.innerText || "";
+    }
+    return "";
   }
 
   // Find prompt input (textarea or contenteditable div) and send button
@@ -99,7 +181,28 @@ export function initChatGPT(onEvent: EventCallback): void {
     if (promptSubmitted) return;
     promptSubmitted = true;
     logger.log("chatgpt-adapter", "Prompt submitted");
-    onEvent("prompt_submit");
+
+    // Collect prompt metadata (without storing actual text)
+    let promptLenBucket: string | undefined;
+    let hasCodeBlock: boolean | undefined;
+    let pasteDetected: boolean | undefined;
+
+    if (promptInput) {
+      const promptText = getPromptText(promptInput);
+      promptLenBucket = getPromptLengthBucket(promptText);
+      hasCodeBlock = detectCodeBlock(promptInput);
+      
+      // Check if paste was detected recently
+      const now = Date.now();
+      pasteDetected = (now - lastPasteTime) < PASTE_DETECTION_WINDOW_MS && lastPasteTime > 0;
+    }
+
+    onEvent("prompt_submit", {
+      prompt_len_bucket: promptLenBucket,
+      has_code_block: hasCodeBlock,
+      paste_detected: pasteDetected,
+    });
+
     // Reset after a short delay to allow for rapid submissions
     setTimeout(() => {
       promptSubmitted = false;
@@ -116,6 +219,12 @@ export function initChatGPT(onEvent: EventCallback): void {
       if (e.key === "Enter" && !e.shiftKey) {
         handlePromptSubmit();
       }
+    });
+
+    // Track paste events for paste detection
+    promptInput.addEventListener("paste", () => {
+      lastPasteTime = Date.now();
+      logger.log("chatgpt-adapter", "Paste detected");
     });
   }
 
