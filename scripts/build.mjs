@@ -21,6 +21,10 @@ async function copyPublicAssets() {
   await copyFile(join(publicDir, "popup.html"), join(distDir, "popup.html"));
   console.log("✓ Copied popup.html");
 
+  // Copy options.html
+  await copyFile(join(publicDir, "options.html"), join(distDir, "options.html"));
+  console.log("✓ Copied options.html");
+
   // Copy icons if they exist
   try {
     const iconsDir = join(publicDir, "icons");
@@ -54,6 +58,7 @@ const buildConfig = {
     "background": join(srcDir, "background.ts"),
     "content": join(srcDir, "content.ts"),
     "popup": join(srcDir, "popup.ts"),
+    "options": join(srcDir, "options.ts"),
   },
 };
 

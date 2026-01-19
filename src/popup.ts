@@ -1,4 +1,100 @@
 import { getDeviceId, getRecentEvents } from "./storage";
+import { getConfig } from "./config-storage";
+
+const LAST_INGEST_STATUS_KEY = "last_ingest_status";
+
+interface LastIngestStatus {
+  success: boolean;
+  error?: string;
+  timestamp: number;
+}
+
+/**
+ * Truncate URL for display
+ */
+function truncateUrl(url: string, maxLength = 40): string {
+  if (url.length <= maxLength) return url;
+  return url.substring(0, maxLength - 3) + "...";
+}
+
+/**
+ * Format timestamp for display
+ */
+function formatTimestamp(timestamp: number): string {
+  const date = new Date(timestamp);
+  const now = Date.now();
+  const diffMs = now - timestamp;
+  const diffMins = Math.floor(diffMs / 60000);
+
+  if (diffMins < 1) return "Just now";
+  if (diffMins < 60) return `${diffMins}m ago`;
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  return date.toLocaleDateString();
+}
+
+/**
+ * Load and display status
+ */
+async function renderStatus(): Promise<void> {
+  const backendUrlEl = document.getElementById("backend-url");
+  const ingestKeyStatusEl = document.getElementById("ingest-key-status");
+  const lastIngestStatusEl = document.getElementById("last-ingest-status");
+
+  try {
+    // Load config
+    const config = await getConfig();
+    
+    if (backendUrlEl) {
+      backendUrlEl.textContent = truncateUrl(config.baseUrl);
+    }
+
+    if (ingestKeyStatusEl) {
+      if (config.ingestKey) {
+        ingestKeyStatusEl.textContent = "✓ Configured";
+        ingestKeyStatusEl.className = "status-value success";
+      } else {
+        ingestKeyStatusEl.textContent = "✗ Not configured";
+        ingestKeyStatusEl.className = "status-value error";
+      }
+    }
+
+    // Load last ingest status
+    if (lastIngestStatusEl) {
+      const result = await chrome.storage.local.get(LAST_INGEST_STATUS_KEY);
+      const lastStatus = result[LAST_INGEST_STATUS_KEY] as LastIngestStatus | undefined;
+
+      if (!lastStatus) {
+        lastIngestStatusEl.textContent = "Never sent";
+        lastIngestStatusEl.className = "status-value";
+      } else if (lastStatus.success) {
+        lastIngestStatusEl.textContent = `Success (${formatTimestamp(lastStatus.timestamp)})`;
+        lastIngestStatusEl.className = "status-value success";
+      } else {
+        const errorMsg = lastStatus.error || "Unknown error";
+        lastIngestStatusEl.textContent = `Error: ${errorMsg}`;
+        lastIngestStatusEl.className = "status-value error";
+      }
+    }
+  } catch (error) {
+    console.error("Failed to load status:", error);
+    if (backendUrlEl) backendUrlEl.textContent = "Error loading";
+    if (ingestKeyStatusEl) ingestKeyStatusEl.textContent = "Error loading";
+  }
+}
+
+/**
+ * Handle options link click
+ */
+function setupOptionsLink(): void {
+  const optionsLink = document.getElementById("options-link");
+  if (optionsLink) {
+    optionsLink.addEventListener("click", (e) => {
+      e.preventDefault();
+      chrome.runtime.openOptionsPage();
+    });
+  }
+}
 
 async function render(): Promise<void> {
   const deviceIdEl = document.getElementById("device-id");
@@ -8,6 +104,12 @@ async function render(): Promise<void> {
     console.error("Required DOM elements not found");
     return;
   }
+
+  // Setup options link
+  setupOptionsLink();
+
+  // Render status
+  await renderStatus();
 
   try {
     const deviceId = await getDeviceId();
@@ -78,4 +180,8 @@ async function render(): Promise<void> {
 }
 
 // Render on load
-document.addEventListener("DOMContentLoaded", render);
+document.addEventListener("DOMContentLoaded", () => {
+  render();
+  // Refresh status every 5 seconds
+  setInterval(renderStatus, 5000);
+});
