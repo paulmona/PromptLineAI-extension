@@ -1,8 +1,29 @@
 import { Event } from "./types";
 import { getDeviceId, getQueue, popBatch, setQueue } from "./storage";
-import { sendEvents } from "./sender";
+import { sendEvents, SendResult } from "./sender";
+import { getConfig } from "./config-storage";
 import { FLUSH_INTERVAL_MS, BATCH_SIZE, MAX_QUEUE_SIZE, DRY_RUN } from "./config";
 import { logger } from "./lib/logger";
+
+const LAST_INGEST_STATUS_KEY = "last_ingest_status";
+
+interface LastIngestStatus {
+  success: boolean;
+  error?: string;
+  timestamp: number;
+}
+
+/**
+ * Store last ingest status for popup display
+ */
+async function storeIngestStatus(result: SendResult): Promise<void> {
+  const status: LastIngestStatus = {
+    success: result.success,
+    error: result.error,
+    timestamp: Date.now(),
+  };
+  await chrome.storage.local.set({ [LAST_INGEST_STATUS_KEY]: status });
+}
 
 let flushLock = false;
 
@@ -51,6 +72,17 @@ async function flushEvents(): Promise<void> {
 
   flushLock = true;
   try {
+    // Check for ingest key before attempting flush
+    const config = await getConfig();
+    if (!config.ingestKey) {
+      logger.warn("background", "Ingest key not configured, skipping flush");
+      await storeIngestStatus({
+        success: false,
+        error: "Missing ingest key. Configure in Options.",
+      });
+      return;
+    }
+
     const queue = await getQueue();
     if (queue.length === 0) {
       logger.log("background", "Queue empty, nothing to flush");
@@ -68,9 +100,12 @@ async function flushEvents(): Promise<void> {
       events: batch,
     };
 
-    const success = await sendEvents(payload);
+    const result = await sendEvents(payload);
 
-    if (success) {
+    // Store status for popup display
+    await storeIngestStatus(result);
+
+    if (result.success) {
       logger.log("background", "Successfully flushed", batch.length, "events");
       // In DRY_RUN mode, keep events in queue so popup can display them
       if (DRY_RUN) {
@@ -80,13 +115,31 @@ async function flushEvents(): Promise<void> {
       }
       // If not DRY_RUN, events already popped in popBatch, so we're done
     } else {
-      // On failure, put events back at the front of the queue
-      logger.warn("background", "Flush failed, re-queuing", batch.length, "events");
-      const currentQueue = await getQueue();
-      await setQueue([...batch, ...currentQueue]);
+      // Handle different error types
+      if (result.statusCode === 409) {
+        // Device org mismatch - permanent error, don't retry
+        logger.error(
+          "background",
+          "Device org mismatch (409), not re-queuing events. User must resolve org conflict."
+        );
+        // Don't re-queue - events are lost (user needs to fix org assignment)
+      } else if (result.statusCode === 401) {
+        // Invalid key - don't retry until user fixes config
+        logger.error("background", "Invalid ingest key (401), not re-queuing until config is fixed");
+        // Don't re-queue - user must fix config
+      } else {
+        // Other errors - re-queue for retry
+        logger.warn("background", "Flush failed, re-queuing", batch.length, "events");
+        const currentQueue = await getQueue();
+        await setQueue([...batch, ...currentQueue]);
+      }
     }
   } catch (error) {
     logger.error("background", "Error during flush:", error);
+    await storeIngestStatus({
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
   } finally {
     flushLock = false;
   }
