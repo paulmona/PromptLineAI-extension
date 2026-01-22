@@ -1,4 +1,4 @@
-export type Tool = "chatgpt" | "claude" | "gemini" | "grok" | "unknown";
+export type Tool = "chatgpt" | "claude" | "gemini" | "grok" | "ai.google.dev" | "unknown";
 export type EventType = "visit" | "prompt_submit" | "file_selected";
 
 export interface Event {

@@ -9,6 +9,8 @@
   "host_permissions": [
     "https://chat.openai.com/*",
     "https://chatgpt.com/*",
+    "https://gemini.google.com/*",
+    "https://ai.google.dev/*",
     "http://127.0.0.1/*",
     "http://localhost/*"
   ],
@@ -19,7 +21,9 @@
     {
       "matches": [
         "https://chat.openai.com/*",
-        "https://chatgpt.com/*"
+        "https://chatgpt.com/*",
+        "https://gemini.google.com/*",
+        "https://ai.google.dev/*"
       ],
       "js": ["content.js"],
       "run_at": "document_idle"

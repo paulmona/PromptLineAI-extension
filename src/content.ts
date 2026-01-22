@@ -2,6 +2,7 @@ import { Event, Tool } from "./types";
 import { generateUUID } from "./lib/uuid";
 import { logger } from "./lib/logger";
 import { initChatGPT } from "./adapters/chatgpt";
+import { initGoogle } from "./adapters/gemini";
 
 /**
  * Check if chrome.runtime is still valid (extension context not invalidated)
@@ -21,6 +22,12 @@ function isRuntimeValid(): boolean {
 function getTool(hostname: string): Tool {
   if (hostname.includes("chat.openai.com") || hostname.includes("chatgpt.com")) {
     return "chatgpt";
+  }
+  if (hostname.includes("gemini.google.com")) {
+    return "gemini";
+  }
+  if (hostname.includes("ai.google.dev")) {
+    return "ai.google.dev";
   }
   return "unknown";
 }
@@ -94,6 +101,10 @@ function init(): void {
   const tool = getTool(window.location.hostname);
   if (tool === "chatgpt") {
     initChatGPT((eventType, metadata) => {
+      createEvent(eventType, metadata);
+    });
+  } else if (tool === "gemini" || tool === "ai.google.dev") {
+    initGoogle((eventType, metadata) => {
       createEvent(eventType, metadata);
     });
   } else {
