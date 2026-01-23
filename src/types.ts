@@ -17,5 +17,6 @@ export interface Event {
 
 export interface QueuePayload {
   device_id: string;
+  device_name: string;
   events: Event[];
 }

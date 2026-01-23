@@ -97,6 +97,7 @@ async function flushEvents(): Promise<void> {
     const deviceId = await getDeviceId();
     const payload = {
       device_id: deviceId,
+      device_name: config.deviceName || "unassigned",
       events: batch,
     };
 

@@ -2,11 +2,13 @@ import { logger } from "./lib/logger";
 
 const CONFIG_BASE_URL_KEY = "config_base_url";
 const CONFIG_INGEST_KEY_KEY = "config_ingest_key";
+const CONFIG_DEVICE_NAME_KEY = "config_device_name";
 const DEFAULT_BASE_URL = "http://127.0.0.1:8787";
 
 export interface Config {
   baseUrl: string;
   ingestKey: string | null;
+  deviceName: string | null;
 }
 
 // In-memory cache
@@ -47,12 +49,13 @@ export async function getConfig(): Promise<Config> {
   }
 
   const storage = getStorage();
-  const result = await storage.get([CONFIG_BASE_URL_KEY, CONFIG_INGEST_KEY_KEY]);
+  const result = await storage.get([CONFIG_BASE_URL_KEY, CONFIG_INGEST_KEY_KEY, CONFIG_DEVICE_NAME_KEY]);
 
   const baseUrl = (result[CONFIG_BASE_URL_KEY] as string) || DEFAULT_BASE_URL;
   const ingestKey = (result[CONFIG_INGEST_KEY_KEY] as string) || null;
+  const deviceName = (result[CONFIG_DEVICE_NAME_KEY] as string) || null;
 
-  cachedConfig = { baseUrl, ingestKey };
+  cachedConfig = { baseUrl, ingestKey, deviceName };
   cacheValid = true;
 
   logger.log(
@@ -68,7 +71,7 @@ export async function getConfig(): Promise<Config> {
 /**
  * Set configuration in storage
  */
-export async function setConfig(baseUrl: string, ingestKey: string): Promise<void> {
+export async function setConfig(baseUrl: string, ingestKey: string, deviceName?: string): Promise<void> {
   // Validate inputs
   if (!baseUrl || typeof baseUrl !== "string") {
     throw new Error("Base URL must be a non-empty string");
@@ -88,6 +91,7 @@ export async function setConfig(baseUrl: string, ingestKey: string): Promise<voi
   await storage.set({
     [CONFIG_BASE_URL_KEY]: baseUrl,
     [CONFIG_INGEST_KEY_KEY]: ingestKey,
+    [CONFIG_DEVICE_NAME_KEY]: deviceName || null,
   });
 
   // Invalidate cache
@@ -107,7 +111,7 @@ export async function setConfig(baseUrl: string, ingestKey: string): Promise<voi
  */
 export async function clearConfig(): Promise<void> {
   const storage = getStorage();
-  await storage.remove([CONFIG_BASE_URL_KEY, CONFIG_INGEST_KEY_KEY]);
+  await storage.remove([CONFIG_BASE_URL_KEY, CONFIG_INGEST_KEY_KEY, CONFIG_DEVICE_NAME_KEY]);
 
   // Invalidate cache
   cacheValid = false;
@@ -123,7 +127,8 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
     areaName === "sync" ||
     areaName === "local" ||
     changes[CONFIG_BASE_URL_KEY] ||
-    changes[CONFIG_INGEST_KEY_KEY]
+    changes[CONFIG_INGEST_KEY_KEY] ||
+    changes[CONFIG_DEVICE_NAME_KEY]
   ) {
     cacheValid = false;
     cachedConfig = null;

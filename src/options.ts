@@ -4,6 +4,7 @@ import { getConfig, setConfig, clearConfig } from "./config-storage";
 const form = document.getElementById("config-form") as HTMLFormElement;
 const baseUrlInput = document.getElementById("base-url") as HTMLInputElement;
 const ingestKeyInput = document.getElementById("ingest-key") as HTMLInputElement;
+const deviceNameInput = document.getElementById("device-name") as HTMLInputElement;
 const saveButton = form?.querySelector('button[type="submit"]') as HTMLButtonElement;
 const clearButton = document.getElementById("clear-btn") as HTMLButtonElement;
 const statusEl = document.getElementById("status") as HTMLDivElement;
@@ -37,6 +38,9 @@ async function loadConfig(): Promise<void> {
       // Don't populate password field for security (user must re-enter)
       ingestKeyInput.value = "";
     }
+    if (deviceNameInput) {
+      deviceNameInput.value = config.deviceName || "";
+    }
   } catch (error) {
     console.error("Failed to load config:", error);
     showStatus("Failed to load current configuration", true);
@@ -56,6 +60,7 @@ async function saveConfig(event: Event): Promise<void> {
 
   const baseUrl = baseUrlInput.value.trim();
   const ingestKey = ingestKeyInput.value.trim();
+  const deviceName = deviceNameInput ? deviceNameInput.value.trim() : undefined;
 
   // Validate inputs
   if (!baseUrl) {
@@ -87,7 +92,7 @@ async function saveConfig(event: Event): Promise<void> {
   }
 
   try {
-    await setConfig(baseUrl, ingestKey);
+    await setConfig(baseUrl, ingestKey, deviceName);
     showStatus("Configuration saved successfully!");
     
     // Clear password field after successful save (security)
@@ -118,6 +123,7 @@ async function handleClear(): Promise<void> {
     await clearConfig();
     if (baseUrlInput) baseUrlInput.value = "";
     if (ingestKeyInput) ingestKeyInput.value = "";
+    if (deviceNameInput) deviceNameInput.value = "";
     showStatus("Configuration cleared");
   } catch (error) {
     console.error("Failed to clear config:", error);
