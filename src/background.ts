@@ -1,7 +1,7 @@
 import { Event } from "./types";
 import { getDeviceId, getQueue, popBatch, setQueue } from "./storage";
 import { sendEvents, SendResult } from "./sender";
-import { getConfig, getPollingInterval, setPolicyConfig } from "./config-storage";
+import { getConfig, getPollingInterval, getPolicyConfig, setPolicyConfig } from "./config-storage";
 import { fetchPolicyConfig } from "./policy-fetcher";
 import { FLUSH_INTERVAL_MS, BATCH_SIZE, MAX_QUEUE_SIZE, DRY_RUN } from "./config";
 import { logger } from "./lib/logger";
@@ -156,8 +156,21 @@ async function fetchAndCachePolicy(): Promise<void> {
   const policy = await fetchPolicyConfig();
 
   if (policy) {
-    await setPolicyConfig(policy);
-    logger.log("background", "Policy configuration updated");
+    // Get current policy to detect changes
+    const currentPolicy = await getPolicyConfig();
+    const policyChanged = 
+      currentPolicy.llms.chatgpt !== policy.llms.chatgpt ||
+      currentPolicy.llms.gemini !== policy.llms.gemini ||
+      currentPolicy.fileUpload.logFileNames !== policy.fileUpload.logFileNames;
+    
+    await setPolicyConfig(policy);  // This now stores timestamp
+    logger.log("background", "Policy configuration updated", {
+      chatgpt: policy.llms.chatgpt,
+      gemini: policy.llms.gemini,
+      logFileNames: policy.fileUpload.logFileNames,
+      changed: policyChanged,
+      fetchedAt: new Date().toISOString(),
+    });
   } else {
     logger.warn("background", "Failed to fetch policy, using cached policy");
   }

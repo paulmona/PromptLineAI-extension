@@ -67,7 +67,15 @@ async function saveConfig(event: Event): Promise<void> {
   const baseUrl = baseUrlInput.value.trim();
   const ingestKey = ingestKeyInput.value.trim();
   const deviceName = deviceNameInput ? deviceNameInput.value.trim() : undefined;
-  const pollingIntervalSeconds = pollingIntervalInput ? parseInt(pollingIntervalInput.value.trim(), 10) : 60;
+  
+  // Get polling interval, defaulting to 60 if empty or invalid
+  let pollingIntervalSeconds = 60;
+  if (pollingIntervalInput) {
+    const parsed = parseInt(pollingIntervalInput.value.trim(), 10);
+    if (!isNaN(parsed)) {
+      pollingIntervalSeconds = parsed;
+    }
+  }
 
   // Validate inputs
   if (!baseUrl) {
@@ -81,7 +89,7 @@ async function saveConfig(event: Event): Promise<void> {
   }
 
   // Validate polling interval
-  if (isNaN(pollingIntervalSeconds) || pollingIntervalSeconds < 10 || pollingIntervalSeconds > 3600) {
+  if (pollingIntervalSeconds < 10 || pollingIntervalSeconds > 3600) {
     showStatus("Polling interval must be between 10 and 3600 seconds", true);
     return;
   }

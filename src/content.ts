@@ -97,40 +97,53 @@ function createEvent(
 async function shouldTrackTool(tool: Tool): Promise<boolean> {
   const policy = await getPolicyConfig();
 
+  // Log policy values for debugging
+  logger.log("content", `Checking policy for tool: ${tool}`, {
+    policy: policy,
+    chatgptEnabled: policy.llms.chatgpt,
+    geminiEnabled: policy.llms.gemini,
+  });
+
   // If no policy cached, default to true (track all)
   if (!policy) {
+    logger.warn("content", "No policy cached, defaulting to track all");
     return true;
   }
 
   // Check policy for each tool
+  let shouldTrack = false;
   if (tool === "chatgpt") {
-    return policy.llms.chatgpt;
+    shouldTrack = policy.llms.chatgpt;
   } else if (tool === "gemini" || tool === "ai.google.dev") {
-    return policy.llms.gemini;
+    shouldTrack = policy.llms.gemini;
+  } else {
+    // For unknown tools, default to true (forward compatibility)
+    shouldTrack = true;
   }
 
-  // For unknown tools, default to true (forward compatibility)
-  return true;
+  logger.log("content", `Policy decision for ${tool}: ${shouldTrack ? "TRACK" : "BLOCK"}`);
+  return shouldTrack;
 }
 
 // Initialize content script
 async function init(): Promise<void> {
   logger.log("content", "Content script initialized for", window.location.hostname);
 
-  // Emit visit event once per page load (always track visits)
-  createEvent("visit");
-
-  // Initialize adapter based on tool
+  // Determine tool first
   const tool = getTool(window.location.hostname);
   
-  // Check policy before initializing adapter
+  // Check policy BEFORE emitting any events
   const shouldTrack = await shouldTrackTool(tool);
   
   if (!shouldTrack) {
-    logger.warn("content", `Tool ${tool} is disabled by policy, skipping adapter initialization`);
-    return;
+    logger.warn("content", `Tool ${tool} is disabled by policy, skipping all event tracking including visits`);
+    return;  // Exit early - no events should be emitted
   }
 
+  // Policy check passed - emit visit event
+  createEvent("visit");
+
+  // Initialize adapter based on tool
   if (tool === "chatgpt") {
     initChatGPT((eventType, metadata) => {
       createEvent(eventType, metadata);

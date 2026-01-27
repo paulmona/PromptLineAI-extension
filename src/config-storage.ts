@@ -6,6 +6,7 @@ const CONFIG_BASE_URL_KEY = "config_base_url";
 const CONFIG_INGEST_KEY_KEY = "config_ingest_key";
 const CONFIG_DEVICE_NAME_KEY = "config_device_name";
 const CONFIG_POLICY_KEY = "config_policy";
+const CONFIG_POLICY_FETCH_TIMESTAMP_KEY = "config_policy_fetch_timestamp";
 const CONFIG_POLLING_INTERVAL_KEY = "config_polling_interval";
 const DEFAULT_BASE_URL = "http://127.0.0.1:8787";
 
@@ -107,6 +108,22 @@ export async function setConfig(baseUrl: string, ingestKey: string, deviceName?:
   cacheValid = false;
   cachedConfig = null;
 
+  // Clear stale "missing ingest key" error status if it exists
+  // This prevents showing old errors after the key has been configured
+  try {
+    const lastIngestStatus = await chrome.storage.local.get("last_ingest_status");
+    if (lastIngestStatus.last_ingest_status) {
+      const status = lastIngestStatus.last_ingest_status as { success: boolean; error?: string };
+      if (!status.success && status.error && status.error.includes("Missing ingest key")) {
+        await chrome.storage.local.remove("last_ingest_status");
+        logger.log("config-storage", "Cleared stale 'missing ingest key' error status");
+      }
+    }
+  } catch (error) {
+    // Non-critical - if we can't clear the status, that's okay
+    logger.log("config-storage", "Could not clear stale status (non-critical):", error);
+  }
+
   logger.log(
     "config-storage",
     "Saved config:",
@@ -137,10 +154,13 @@ export async function getPolicyConfig(): Promise<PolicyConfig> {
   const result = await storage.get([CONFIG_POLICY_KEY]);
 
   if (result[CONFIG_POLICY_KEY]) {
-    return result[CONFIG_POLICY_KEY] as PolicyConfig;
+    const policy = result[CONFIG_POLICY_KEY] as PolicyConfig;
+    logger.log("config-storage", "Retrieved cached policy:", policy);
+    return policy;
   }
 
   // Return default policy if no cache exists
+  logger.warn("config-storage", "No cached policy found, using default (all enabled)");
   return DEFAULT_POLICY;
 }
 
@@ -149,11 +169,28 @@ export async function getPolicyConfig(): Promise<PolicyConfig> {
  */
 export async function setPolicyConfig(policy: PolicyConfig): Promise<void> {
   const storage = getStorage();
+  const timestamp = Date.now();
+  
   await storage.set({
     [CONFIG_POLICY_KEY]: policy,
+    [CONFIG_POLICY_FETCH_TIMESTAMP_KEY]: timestamp,
   });
 
-  logger.log("config-storage", "Policy config cached");
+  logger.log("config-storage", "Policy config cached:", {
+    chatgpt: policy.llms.chatgpt,
+    gemini: policy.llms.gemini,
+    logFileNames: policy.fileUpload.logFileNames,
+    fetchedAt: new Date(timestamp).toISOString(),
+  });
+}
+
+/**
+ * Get policy fetch timestamp
+ */
+export async function getPolicyFetchTimestamp(): Promise<number | null> {
+  const storage = getStorage();
+  const result = await storage.get([CONFIG_POLICY_FETCH_TIMESTAMP_KEY]);
+  return (result[CONFIG_POLICY_FETCH_TIMESTAMP_KEY] as number) || null;
 }
 
 /**

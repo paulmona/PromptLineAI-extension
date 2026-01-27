@@ -1,5 +1,5 @@
 import { getDeviceId, getRecentEvents } from "./storage";
-import { getConfig } from "./config-storage";
+import { getConfig, getPolicyConfig, getPolicyFetchTimestamp } from "./config-storage";
 
 const LAST_INGEST_STATUS_KEY = "last_ingest_status";
 
@@ -40,6 +40,8 @@ async function renderStatus(): Promise<void> {
   const backendUrlEl = document.getElementById("backend-url");
   const ingestKeyStatusEl = document.getElementById("ingest-key-status");
   const lastIngestStatusEl = document.getElementById("last-ingest-status");
+  const lastPolicyFetchEl = document.getElementById("last-policy-fetch");
+  const policyConfigEl = document.getElementById("policy-config");
 
   try {
     // Load config
@@ -76,10 +78,38 @@ async function renderStatus(): Promise<void> {
         lastIngestStatusEl.className = "status-value error";
       }
     }
+
+    // Load policy configuration
+    const policy = await getPolicyConfig();
+    const policyFetchTimestamp = await getPolicyFetchTimestamp();
+    
+    // Display last policy fetch
+    if (lastPolicyFetchEl) {
+      if (policyFetchTimestamp) {
+        lastPolicyFetchEl.textContent = formatTimestamp(policyFetchTimestamp);
+        lastPolicyFetchEl.className = "status-value success";
+      } else {
+        lastPolicyFetchEl.textContent = "Never";
+        lastPolicyFetchEl.className = "status-value warning";
+      }
+    }
+    
+    // Display current policy configuration
+    if (policyConfigEl) {
+      const configParts = [
+        `chatgpt: ${policy.llms.chatgpt}`,
+        `gemini: ${policy.llms.gemini}`,
+        `logFileNames: ${policy.fileUpload.logFileNames}`,
+      ];
+      policyConfigEl.textContent = configParts.join(", ");
+      policyConfigEl.className = "status-value";
+    }
   } catch (error) {
     console.error("Failed to load status:", error);
     if (backendUrlEl) backendUrlEl.textContent = "Error loading";
     if (ingestKeyStatusEl) ingestKeyStatusEl.textContent = "Error loading";
+    if (lastPolicyFetchEl) lastPolicyFetchEl.textContent = "Error loading";
+    if (policyConfigEl) policyConfigEl.textContent = "Error loading";
   }
 }
 
