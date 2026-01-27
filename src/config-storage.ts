@@ -15,6 +15,9 @@ const DEFAULT_POLICY: PolicyConfig = {
   fileUpload: { logFileNames: true },
 };
 
+// Track if we've already logged the policy cache warning
+let policyCacheWarningLogged = false;
+
 export interface Config {
   baseUrl: string;
   ingestKey: string | null;
@@ -160,7 +163,10 @@ export async function getPolicyConfig(): Promise<PolicyConfig> {
   }
 
   // Return default policy if no cache exists
-  logger.warn("config-storage", "No cached policy found, using default (all enabled)");
+  if (!policyCacheWarningLogged) {
+    logger.log("config-storage", "No cached policy found, using default (all enabled)");
+    policyCacheWarningLogged = true;
+  }
   return DEFAULT_POLICY;
 }
 

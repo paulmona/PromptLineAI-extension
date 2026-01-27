@@ -84,10 +84,15 @@ function createEvent(
     // Check if error is due to invalidated context
     const errorMessage = err instanceof Error ? err.message : String(err);
     if (errorMessage.includes("Extension context invalidated") || errorMessage.includes("message port closed")) {
-      logger.warn("content", "Extension context invalidated - extension may have been reloaded");
+      // Silently handle - extension was reloaded, this is expected
+      // Don't log as warning since it's not actionable
+      return;
     } else {
       logger.error("content", "Failed to send event:", err);
     }
+  }).catch(() => {
+    // Swallow any errors from the catch handler itself
+    // This prevents uncaught promise rejection warnings
   });
 }
 

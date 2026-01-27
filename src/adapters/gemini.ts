@@ -31,6 +31,8 @@ export function initGoogle(onEvent: EventCallback): void {
   // Track paste events for paste detection
   let lastPasteTime: number = 0;
   const PASTE_DETECTION_WINDOW_MS = 5000; // 5 seconds
+  // Track if we've already logged the send button warning (Gemini uses Enter key, not a button)
+  let sendButtonWarningLogged = false;
 
   /**
    * Check if an element is still valid (exists, in DOM, and visible)
@@ -192,8 +194,9 @@ export function initGoogle(onEvent: EventCallback): void {
           break;
         }
       }
-      if (!sendButton) {
-        logger.warn("gemini-adapter", "Send button not found");
+      if (!sendButton && !sendButtonWarningLogged) {
+        logger.log("gemini-adapter", "Send button not found (expected - Gemini uses Enter key)");
+        sendButtonWarningLogged = true;
       }
     }
   }
