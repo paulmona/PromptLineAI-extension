@@ -20,3 +20,13 @@ export interface QueuePayload {
   device_name: string;
   events: Event[];
 }
+
+export interface PolicyConfig {
+  llms: {
+    chatgpt: boolean;
+    gemini: boolean;
+  };
+  fileUpload: {
+    logFileNames: boolean;
+  };
+}

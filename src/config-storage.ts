@@ -1,9 +1,18 @@
 import { logger } from "./lib/logger";
+import { PolicyConfig } from "./types";
+import { DEFAULT_POLLING_INTERVAL_MS } from "./config";
 
 const CONFIG_BASE_URL_KEY = "config_base_url";
 const CONFIG_INGEST_KEY_KEY = "config_ingest_key";
 const CONFIG_DEVICE_NAME_KEY = "config_device_name";
+const CONFIG_POLICY_KEY = "config_policy";
+const CONFIG_POLLING_INTERVAL_KEY = "config_polling_interval";
 const DEFAULT_BASE_URL = "http://127.0.0.1:8787";
+
+const DEFAULT_POLICY: PolicyConfig = {
+  llms: { chatgpt: true, gemini: true },
+  fileUpload: { logFileNames: true },
+};
 
 export interface Config {
   baseUrl: string;
@@ -118,6 +127,68 @@ export async function clearConfig(): Promise<void> {
   cachedConfig = null;
 
   logger.log("config-storage", "Cleared config");
+}
+
+/**
+ * Get cached policy configuration
+ */
+export async function getPolicyConfig(): Promise<PolicyConfig> {
+  const storage = getStorage();
+  const result = await storage.get([CONFIG_POLICY_KEY]);
+
+  if (result[CONFIG_POLICY_KEY]) {
+    return result[CONFIG_POLICY_KEY] as PolicyConfig;
+  }
+
+  // Return default policy if no cache exists
+  return DEFAULT_POLICY;
+}
+
+/**
+ * Store policy configuration
+ */
+export async function setPolicyConfig(policy: PolicyConfig): Promise<void> {
+  const storage = getStorage();
+  await storage.set({
+    [CONFIG_POLICY_KEY]: policy,
+  });
+
+  logger.log("config-storage", "Policy config cached");
+}
+
+/**
+ * Get polling interval in milliseconds
+ */
+export async function getPollingInterval(): Promise<number> {
+  const storage = getStorage();
+  const result = await storage.get([CONFIG_POLLING_INTERVAL_KEY]);
+
+  if (result[CONFIG_POLLING_INTERVAL_KEY] !== undefined) {
+    const interval = result[CONFIG_POLLING_INTERVAL_KEY] as number;
+    // Ensure it's a valid number and within reasonable bounds
+    if (typeof interval === "number" && interval >= 10000 && interval <= 3600000) {
+      return interval;
+    }
+  }
+
+  return DEFAULT_POLLING_INTERVAL_MS;
+}
+
+/**
+ * Set polling interval in milliseconds
+ */
+export async function setPollingInterval(ms: number): Promise<void> {
+  // Validate bounds
+  if (typeof ms !== "number" || ms < 10000 || ms > 3600000) {
+    throw new Error("Polling interval must be between 10000 and 3600000 milliseconds");
+  }
+
+  const storage = getStorage();
+  await storage.set({
+    [CONFIG_POLLING_INTERVAL_KEY]: ms,
+  });
+
+  logger.log("config-storage", `Polling interval set to ${ms}ms`);
 }
 
 // Listen for storage changes to invalidate cache

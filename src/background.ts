@@ -1,7 +1,8 @@
 import { Event } from "./types";
 import { getDeviceId, getQueue, popBatch, setQueue } from "./storage";
 import { sendEvents, SendResult } from "./sender";
-import { getConfig } from "./config-storage";
+import { getConfig, getPollingInterval, setPolicyConfig } from "./config-storage";
+import { fetchPolicyConfig } from "./policy-fetcher";
 import { FLUSH_INTERVAL_MS, BATCH_SIZE, MAX_QUEUE_SIZE, DRY_RUN } from "./config";
 import { logger } from "./lib/logger";
 
@@ -26,6 +27,7 @@ async function storeIngestStatus(result: SendResult): Promise<void> {
 }
 
 let flushLock = false;
+let policyPollingInterval: number | null = null;
 
 // Handle incoming messages from content script
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
@@ -146,6 +148,52 @@ async function flushEvents(): Promise<void> {
   }
 }
 
+/**
+ * Fetch and cache policy configuration
+ */
+async function fetchAndCachePolicy(): Promise<void> {
+  logger.log("background", "Fetching policy configuration");
+  const policy = await fetchPolicyConfig();
+
+  if (policy) {
+    await setPolicyConfig(policy);
+    logger.log("background", "Policy configuration updated");
+  } else {
+    logger.warn("background", "Failed to fetch policy, using cached policy");
+  }
+}
+
+/**
+ * Start policy polling with the configured interval
+ */
+async function startPolicyPolling(): Promise<void> {
+  // Clear existing interval if any
+  if (policyPollingInterval !== null) {
+    clearInterval(policyPollingInterval);
+    policyPollingInterval = null;
+  }
+
+  const intervalMs = await getPollingInterval();
+  logger.log("background", "Policy polling interval:", intervalMs, "ms");
+
+  // Fetch immediately after a short delay
+  setTimeout(fetchAndCachePolicy, 2000);
+
+  // Set up periodic polling
+  policyPollingInterval = setInterval(fetchAndCachePolicy, intervalMs) as unknown as number;
+}
+
+// Listen for polling interval changes
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (
+    (areaName === "sync" || areaName === "local") &&
+    changes["config_polling_interval"]
+  ) {
+    logger.log("background", "Polling interval changed, restarting policy polling");
+    startPolicyPolling();
+  }
+});
+
 // Start periodic flush
 logger.log("background", "Background service worker started");
 logger.log("background", "Flush interval:", FLUSH_INTERVAL_MS, "ms");
@@ -155,3 +203,6 @@ setTimeout(flushEvents, 2000);
 
 // Periodic flush
 setInterval(flushEvents, FLUSH_INTERVAL_MS);
+
+// Start policy polling
+startPolicyPolling();

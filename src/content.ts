@@ -1,6 +1,7 @@
 import { Event, Tool } from "./types";
 import { generateUUID } from "./lib/uuid";
 import { logger } from "./lib/logger";
+import { getPolicyConfig } from "./config-storage";
 import { initChatGPT } from "./adapters/chatgpt";
 import { initGoogle } from "./adapters/gemini";
 
@@ -90,15 +91,46 @@ function createEvent(
   });
 }
 
+/**
+ * Check if a tool should be tracked based on policy
+ */
+async function shouldTrackTool(tool: Tool): Promise<boolean> {
+  const policy = await getPolicyConfig();
+
+  // If no policy cached, default to true (track all)
+  if (!policy) {
+    return true;
+  }
+
+  // Check policy for each tool
+  if (tool === "chatgpt") {
+    return policy.llms.chatgpt;
+  } else if (tool === "gemini" || tool === "ai.google.dev") {
+    return policy.llms.gemini;
+  }
+
+  // For unknown tools, default to true (forward compatibility)
+  return true;
+}
+
 // Initialize content script
-function init(): void {
+async function init(): Promise<void> {
   logger.log("content", "Content script initialized for", window.location.hostname);
 
-  // Emit visit event once per page load
+  // Emit visit event once per page load (always track visits)
   createEvent("visit");
 
   // Initialize adapter based on tool
   const tool = getTool(window.location.hostname);
+  
+  // Check policy before initializing adapter
+  const shouldTrack = await shouldTrackTool(tool);
+  
+  if (!shouldTrack) {
+    logger.warn("content", `Tool ${tool} is disabled by policy, skipping adapter initialization`);
+    return;
+  }
+
   if (tool === "chatgpt") {
     initChatGPT((eventType, metadata) => {
       createEvent(eventType, metadata);

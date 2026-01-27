@@ -4,3 +4,4 @@ export const DRY_RUN = false;
 export const FLUSH_INTERVAL_MS = 10000;
 export const BATCH_SIZE = 50;
 export const MAX_QUEUE_SIZE = 500;
+export const DEFAULT_POLLING_INTERVAL_MS = 60000;

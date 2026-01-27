@@ -1,5 +1,6 @@
 import { EventType } from "../types";
 import { logger } from "../lib/logger";
+import { getPolicyConfig } from "../config-storage";
 
 export type EventCallback = (
   eventType: EventType,
@@ -51,6 +52,15 @@ export function initGoogle(onEvent: EventCallback): void {
     if (len <= 200) return "0-200";
     if (len <= 1000) return "200-1000";
     return "1000+";
+  }
+
+  /**
+   * Check if file names should be logged based on policy
+   */
+  async function shouldLogFileName(): Promise<boolean> {
+    const policy = await getPolicyConfig();
+    // Default to true if no policy cached
+    return policy?.fileUpload?.logFileNames ?? true;
   }
 
   /**
@@ -258,7 +268,7 @@ export function initGoogle(onEvent: EventCallback): void {
       if (!fileInputsWithListeners.has(input)) {
         fileInputsWithListeners.add(input);
         
-        input.addEventListener("change", (e) => {
+        input.addEventListener("change", async (e) => {
           const target = e.target as HTMLInputElement;
           const files = target.files;
           if (files && files.length > 0) {
@@ -266,7 +276,14 @@ export function initGoogle(onEvent: EventCallback): void {
             const fileExt = file.name.split(".").pop() || null;
             const fileSizeKb = Math.round(file.size / 1024);
             logger.log("gemini-adapter", "File selected:", file.name, fileSizeKb, "KB");
-            onEvent("file_selected", { file_ext: fileExt || undefined, file_size_kb: fileSizeKb, file_name: file.name });
+            
+            // Check policy for file name logging
+            const logFileName = await shouldLogFileName();
+            onEvent("file_selected", { 
+              file_ext: fileExt || undefined, 
+              file_size_kb: fileSizeKb, 
+              file_name: logFileName ? file.name : null 
+            });
           }
         });
       }
