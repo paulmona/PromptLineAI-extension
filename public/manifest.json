@@ -5,7 +5,8 @@
   "description": "Detect AI tool usage events on ChatGPT",
   "permissions": [
     "storage",
-    "tabs"
+    "tabs",
+    "cookies"
   ],
   "host_permissions": [
     "https://chat.openai.com/*",
@@ -13,7 +14,8 @@
     "https://gemini.google.com/*",
     "https://ai.google.dev/*",
     "http://127.0.0.1/*",
-    "http://localhost/*"
+    "http://localhost/*",
+    "https://*.clerk.accounts.dev/*"
   ],
   "background": {
     "service_worker": "background.js"

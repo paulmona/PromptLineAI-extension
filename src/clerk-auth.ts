@@ -50,11 +50,19 @@ async function getClerkInstance(): Promise<Awaited<ReturnType<typeof createClerk
 export async function getClerkToken(retry = true): Promise<string | null> {
   const clerk = await getClerkInstance();
   if (!clerk) return null;
+
+  if (!clerk.session) {
+    clerkInstance = null;
+    logger.log("clerk-auth", "getToken: session present", false);
+    return null;
+  }
+
+  logger.log("clerk-auth", "getToken: session present", true);
   try {
-    const token = await clerk.getToken();
+    const token = await clerk.session.getToken();
     return token;
   } catch (err) {
-    logger.warn("clerk-auth", "getToken failed", retry ? "(will retry once)" : "");
+    logger.warn("clerk-auth", "getToken failed", err);
     if (retry) {
       clerkInstance = null;
       return getClerkToken(false);
