@@ -3,7 +3,6 @@ import { getConfig, setConfig, clearConfig, getPollingInterval, setPollingInterv
 // DOM elements
 const form = document.getElementById("config-form") as HTMLFormElement;
 const baseUrlInput = document.getElementById("base-url") as HTMLInputElement;
-const ingestKeyInput = document.getElementById("ingest-key") as HTMLInputElement;
 const deviceNameInput = document.getElementById("device-name") as HTMLInputElement;
 const pollingIntervalInput = document.getElementById("polling-interval") as HTMLInputElement;
 const saveButton = form?.querySelector('button[type="submit"]') as HTMLButtonElement;
@@ -35,10 +34,6 @@ async function loadConfig(): Promise<void> {
     if (baseUrlInput) {
       baseUrlInput.value = config.baseUrl;
     }
-    if (ingestKeyInput) {
-      // Don't populate password field for security (user must re-enter)
-      ingestKeyInput.value = "";
-    }
     if (deviceNameInput) {
       deviceNameInput.value = config.deviceName || "";
     }
@@ -59,13 +54,12 @@ async function loadConfig(): Promise<void> {
 async function saveConfig(event: Event): Promise<void> {
   event.preventDefault();
 
-  if (!form || !baseUrlInput || !ingestKeyInput) {
+  if (!form || !baseUrlInput) {
     showStatus("Form elements not found", true);
     return;
   }
 
   const baseUrl = baseUrlInput.value.trim();
-  const ingestKey = ingestKeyInput.value.trim();
   const deviceName = deviceNameInput ? deviceNameInput.value.trim() : undefined;
   
   // Get polling interval, defaulting to 60 if empty or invalid
@@ -80,11 +74,6 @@ async function saveConfig(event: Event): Promise<void> {
   // Validate inputs
   if (!baseUrl) {
     showStatus("Backend URL is required", true);
-    return;
-  }
-
-  if (!ingestKey) {
-    showStatus("Ingest key is required", true);
     return;
   }
 
@@ -113,13 +102,9 @@ async function saveConfig(event: Event): Promise<void> {
   }
 
   try {
-    await setConfig(baseUrl, ingestKey, deviceName);
-    // Save polling interval (convert seconds to milliseconds)
+    await setConfig(baseUrl, deviceName);
     await setPollingInterval(pollingIntervalSeconds * 1000);
     showStatus("Configuration saved successfully!");
-    
-    // Clear password field after successful save (security)
-    ingestKeyInput.value = "";
   } catch (error) {
     console.error("Failed to save config:", error);
     showStatus(
@@ -145,7 +130,6 @@ async function handleClear(): Promise<void> {
   try {
     await clearConfig();
     if (baseUrlInput) baseUrlInput.value = "";
-    if (ingestKeyInput) ingestKeyInput.value = "";
     if (deviceNameInput) deviceNameInput.value = "";
     if (pollingIntervalInput) pollingIntervalInput.value = "60";
     showStatus("Configuration cleared");

@@ -52,6 +52,10 @@ const baseConfig = {
   logLevel: "info",
 };
 
+// Clerk config injected at build time (optional)
+const clerkPublishableKey = process.env.CLERK_PUBLISHABLE_KEY ?? "";
+const clerkSyncHost = process.env.CLERK_SYNC_HOST ?? "";
+
 const buildConfig = {
   ...baseConfig,
   entryPoints: {
@@ -59,6 +63,10 @@ const buildConfig = {
     "content": join(srcDir, "content.ts"),
     "popup": join(srcDir, "popup.ts"),
     "options": join(srcDir, "options.ts"),
+  },
+  define: {
+    __CLERK_PUBLISHABLE_KEY__: JSON.stringify(clerkPublishableKey),
+    __CLERK_SYNC_HOST__: JSON.stringify(clerkSyncHost),
   },
 };
 

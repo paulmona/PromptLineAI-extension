@@ -103,18 +103,47 @@
     .options-link:hover {
       background: #1565c0;
     }
+    .auth-section {
+      margin-bottom: 16px;
+      padding: 12px;
+      background: #f5f5f5;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+    .auth-link {
+      display: inline-block;
+      margin-right: 8px;
+      padding: 6px 12px;
+      background: #1976d2;
+      color: white;
+      text-decoration: none;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+    .auth-link:hover {
+      background: #1565c0;
+    }
+    .auth-link.secondary {
+      background: #757575;
+    }
+    .auth-link.secondary:hover {
+      background: #616161;
+    }
   </style>
 </head>
 <body>
   <h1>PromptLineAI Events</h1>
+  <div class="auth-section" id="auth-section">
+    <div class="status-item" id="auth-state-row">
+      <span class="status-label">Signed in:</span>
+      <span class="status-value" id="auth-state">Loading...</span>
+    </div>
+    <div id="auth-actions" style="margin-top: 8px;"></div>
+  </div>
   <div class="status-section" id="status-section">
     <div class="status-item">
       <span class="status-label">Backend:</span>
       <span class="status-value" id="backend-url">Loading...</span>
-    </div>
-    <div class="status-item">
-      <span class="status-label">Ingest Key:</span>
-      <span class="status-value" id="ingest-key-status">Loading...</span>
     </div>
     <div class="status-item">
       <span class="status-label">Last Ingest:</span>

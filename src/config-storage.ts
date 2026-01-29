@@ -3,7 +3,6 @@ import { PolicyConfig } from "./types";
 import { DEFAULT_POLLING_INTERVAL_MS } from "./config";
 
 const CONFIG_BASE_URL_KEY = "config_base_url";
-const CONFIG_INGEST_KEY_KEY = "config_ingest_key";
 const CONFIG_DEVICE_NAME_KEY = "config_device_name";
 const CONFIG_POLICY_KEY = "config_policy";
 const CONFIG_POLICY_FETCH_TIMESTAMP_KEY = "config_policy_fetch_timestamp";
@@ -20,22 +19,12 @@ let policyCacheWarningLogged = false;
 
 export interface Config {
   baseUrl: string;
-  ingestKey: string | null;
   deviceName: string | null;
 }
 
 // In-memory cache
 let cachedConfig: Config | null = null;
 let cacheValid = false;
-
-/**
- * Redact ingest key for logging (never log the actual key)
- */
-function redactKey(key: string | null): string {
-  if (!key) return "(not set)";
-  if (key.length <= 8) return "***";
-  return `${key.substring(0, 4)}***${key.substring(key.length - 4)}`;
-}
 
 /**
  * Get storage API (prefer sync, fallback to local)
@@ -62,21 +51,15 @@ export async function getConfig(): Promise<Config> {
   }
 
   const storage = getStorage();
-  const result = await storage.get([CONFIG_BASE_URL_KEY, CONFIG_INGEST_KEY_KEY, CONFIG_DEVICE_NAME_KEY]);
+  const result = await storage.get([CONFIG_BASE_URL_KEY, CONFIG_DEVICE_NAME_KEY]);
 
   const baseUrl = (result[CONFIG_BASE_URL_KEY] as string) || DEFAULT_BASE_URL;
-  const ingestKey = (result[CONFIG_INGEST_KEY_KEY] as string) || null;
   const deviceName = (result[CONFIG_DEVICE_NAME_KEY] as string) || null;
 
-  cachedConfig = { baseUrl, ingestKey, deviceName };
+  cachedConfig = { baseUrl, deviceName };
   cacheValid = true;
 
-  logger.log(
-    "config-storage",
-    "Loaded config:",
-    `baseUrl=${baseUrl}`,
-    `ingestKey=${redactKey(ingestKey)}`
-  );
+  logger.log("config-storage", "Loaded config:", `baseUrl=${baseUrl}`);
 
   return cachedConfig;
 }
@@ -84,16 +67,10 @@ export async function getConfig(): Promise<Config> {
 /**
  * Set configuration in storage
  */
-export async function setConfig(baseUrl: string, ingestKey: string, deviceName?: string): Promise<void> {
-  // Validate inputs
+export async function setConfig(baseUrl: string, deviceName?: string): Promise<void> {
   if (!baseUrl || typeof baseUrl !== "string") {
     throw new Error("Base URL must be a non-empty string");
   }
-  if (!ingestKey || typeof ingestKey !== "string") {
-    throw new Error("Ingest key must be a non-empty string");
-  }
-
-  // Basic URL validation
   try {
     new URL(baseUrl);
   } catch {
@@ -103,36 +80,12 @@ export async function setConfig(baseUrl: string, ingestKey: string, deviceName?:
   const storage = getStorage();
   await storage.set({
     [CONFIG_BASE_URL_KEY]: baseUrl,
-    [CONFIG_INGEST_KEY_KEY]: ingestKey,
     [CONFIG_DEVICE_NAME_KEY]: deviceName || null,
   });
 
-  // Invalidate cache
   cacheValid = false;
   cachedConfig = null;
-
-  // Clear stale "missing ingest key" error status if it exists
-  // This prevents showing old errors after the key has been configured
-  try {
-    const lastIngestStatus = await chrome.storage.local.get("last_ingest_status");
-    if (lastIngestStatus.last_ingest_status) {
-      const status = lastIngestStatus.last_ingest_status as { success: boolean; error?: string };
-      if (!status.success && status.error && status.error.includes("Missing ingest key")) {
-        await chrome.storage.local.remove("last_ingest_status");
-        logger.log("config-storage", "Cleared stale 'missing ingest key' error status");
-      }
-    }
-  } catch (error) {
-    // Non-critical - if we can't clear the status, that's okay
-    logger.log("config-storage", "Could not clear stale status (non-critical):", error);
-  }
-
-  logger.log(
-    "config-storage",
-    "Saved config:",
-    `baseUrl=${baseUrl}`,
-    `ingestKey=${redactKey(ingestKey)}`
-  );
+  logger.log("config-storage", "Saved config:", `baseUrl=${baseUrl}`);
 }
 
 /**
@@ -140,7 +93,7 @@ export async function setConfig(baseUrl: string, ingestKey: string, deviceName?:
  */
 export async function clearConfig(): Promise<void> {
   const storage = getStorage();
-  await storage.remove([CONFIG_BASE_URL_KEY, CONFIG_INGEST_KEY_KEY, CONFIG_DEVICE_NAME_KEY]);
+  await storage.remove([CONFIG_BASE_URL_KEY, CONFIG_DEVICE_NAME_KEY]);
 
   // Invalidate cache
   cacheValid = false;
@@ -236,12 +189,10 @@ export async function setPollingInterval(ms: number): Promise<void> {
 
 // Listen for storage changes to invalidate cache
 chrome.storage.onChanged.addListener((changes, areaName) => {
-  // Only invalidate if our keys changed
   if (
     areaName === "sync" ||
     areaName === "local" ||
     changes[CONFIG_BASE_URL_KEY] ||
-    changes[CONFIG_INGEST_KEY_KEY] ||
     changes[CONFIG_DEVICE_NAME_KEY]
   ) {
     cacheValid = false;

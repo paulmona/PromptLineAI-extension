@@ -3,6 +3,7 @@ import { getDeviceId, getQueue, popBatch, setQueue } from "./storage";
 import { sendEvents, SendResult } from "./sender";
 import { getConfig, getPollingInterval, getPolicyConfig, setPolicyConfig } from "./config-storage";
 import { fetchPolicyConfig } from "./policy-fetcher";
+import { getClerkToken, getAuthStateForDisplay, clerkSignOut } from "./clerk-auth";
 import { FLUSH_INTERVAL_MS, BATCH_SIZE, MAX_QUEUE_SIZE, DRY_RUN } from "./config";
 import { logger } from "./lib/logger";
 
@@ -11,6 +12,7 @@ const LAST_INGEST_STATUS_KEY = "last_ingest_status";
 interface LastIngestStatus {
   success: boolean;
   error?: string;
+  errorCode?: string;
   timestamp: number;
 }
 
@@ -21,6 +23,7 @@ async function storeIngestStatus(result: SendResult): Promise<void> {
   const status: LastIngestStatus = {
     success: result.success,
     error: result.error,
+    errorCode: result.errorCode,
     timestamp: Date.now(),
   };
   await chrome.storage.local.set({ [LAST_INGEST_STATUS_KEY]: status });
@@ -29,7 +32,7 @@ async function storeIngestStatus(result: SendResult): Promise<void> {
 let flushLock = false;
 let policyPollingInterval: number | null = null;
 
-// Handle incoming messages from content script
+// Message API: allowlist by type. Only handle known types. Never return tokens.
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === "event") {
     handleEvent(message.event as Event)
@@ -38,8 +41,28 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         logger.error("background", "Failed to handle event:", err);
         sendResponse({ success: false, error: String(err) });
       });
-    return true; // Keep channel open for async response
+    return true;
   }
+  if (message.type === "getAuthState") {
+    getAuthStateForDisplay()
+      .then((state) => sendResponse(state))
+      .catch((err) => {
+        logger.error("background", "getAuthState failed:", err);
+        sendResponse({ signedIn: false });
+      });
+    return true;
+  }
+  if (message.type === "signOut") {
+    clerkSignOut()
+      .then(() => sendResponse({ success: true }))
+      .catch((err) => {
+        logger.error("background", "signOut failed:", err);
+        sendResponse({ success: false });
+      });
+    return true;
+  }
+  // Ignore unknown message types; do not reply with auth state or tokens
+  return false;
 });
 
 // Handle incoming event
@@ -74,25 +97,30 @@ async function flushEvents(): Promise<void> {
 
   flushLock = true;
   try {
-    // Check for ingest key before attempting flush
-    const config = await getConfig();
-    if (!config.ingestKey) {
-      logger.warn("background", "Ingest key not configured, skipping flush");
+    // Get token per request, retry once on failure
+    let token = await getClerkToken(true);
+    if (!token) {
+      logger.warn("background", "No token, skipping flush (auth attention needed)");
       await storeIngestStatus({
         success: false,
-        error: "Missing ingest key. Configure in Options.",
+        error: "Not signed in. Sign in to send events.",
+        timestamp: Date.now(),
       });
+      flushLock = false;
       return;
     }
 
+    const config = await getConfig();
     const queue = await getQueue();
     if (queue.length === 0) {
       logger.log("background", "Queue empty, nothing to flush");
+      flushLock = false;
       return;
     }
 
     const batch = await popBatch(Math.min(BATCH_SIZE, queue.length));
     if (batch.length === 0) {
+      flushLock = false;
       return;
     }
 
@@ -103,7 +131,7 @@ async function flushEvents(): Promise<void> {
       events: batch,
     };
 
-    const result = await sendEvents(payload);
+    const result = await sendEvents(payload, token);
 
     // Store status for popup display
     await storeIngestStatus(result);
@@ -118,20 +146,13 @@ async function flushEvents(): Promise<void> {
       }
       // If not DRY_RUN, events already popped in popBatch, so we're done
     } else {
-      // Handle different error types
-      if (result.statusCode === 409) {
-        // Device org mismatch - permanent error, don't retry
+      if (result.statusCode === 409 || result.statusCode === 401) {
         logger.error(
           "background",
-          "Device org mismatch (409), not re-queuing events. User must resolve org conflict."
+          result.statusCode === 409 ? "Device org mismatch (409)" : "Unauthorized (401)",
+          "not re-queuing"
         );
-        // Don't re-queue - events are lost (user needs to fix org assignment)
-      } else if (result.statusCode === 401) {
-        // Invalid key - don't retry until user fixes config
-        logger.error("background", "Invalid ingest key (401), not re-queuing until config is fixed");
-        // Don't re-queue - user must fix config
       } else {
-        // Other errors - re-queue for retry
         logger.warn("background", "Flush failed, re-queuing", batch.length, "events");
         const currentQueue = await getQueue();
         await setQueue([...batch, ...currentQueue]);
@@ -152,8 +173,13 @@ async function flushEvents(): Promise<void> {
  * Fetch and cache policy configuration
  */
 async function fetchAndCachePolicy(): Promise<void> {
+  const token = await getClerkToken(true);
+  if (!token) {
+    logger.warn("background", "No token, skipping policy fetch");
+    return;
+  }
   logger.log("background", "Fetching policy configuration");
-  const policy = await fetchPolicyConfig();
+  const policy = await fetchPolicyConfig(token);
 
   if (policy) {
     // Get current policy to detect changes

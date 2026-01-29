@@ -5,21 +5,17 @@ import { logger } from "./lib/logger";
 const TIMEOUT_MS = 5000;
 
 /**
- * Fetch policy configuration from backend
- * Returns null on failure (network error, 401, 500, etc.)
+ * Fetch policy configuration from backend.
+ * Returns null on failure (no token, network error, 401, 403, 500, etc.)
  */
-export async function fetchPolicyConfig(): Promise<PolicyConfig | null> {
-  // Load config from storage
-  const config = await getConfig();
-
-  // Check for ingest key
-  if (!config.ingestKey) {
-    logger.warn("policy-fetcher", "Ingest key not configured, cannot fetch policy");
+export async function fetchPolicyConfig(bearerToken: string | null): Promise<PolicyConfig | null> {
+  if (!bearerToken) {
+    logger.warn("policy-fetcher", "No token, cannot fetch policy");
     return null;
   }
 
-  // Build URL
-  const baseUrl = config.baseUrl.replace(/\/$/, ""); // Remove trailing slash
+  const config = await getConfig();
+  const baseUrl = config.baseUrl.replace(/\/$/, "");
   const url = `${baseUrl}/config`;
 
   logger.log("policy-fetcher", `Fetching policy from GET ${url}`);
@@ -27,7 +23,7 @@ export async function fetchPolicyConfig(): Promise<PolicyConfig | null> {
   try {
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
-      "X-INGEST-KEY": config.ingestKey,
+      Authorization: `Bearer ${bearerToken}`,
     };
 
     const controller = new AbortController();
@@ -42,9 +38,11 @@ export async function fetchPolicyConfig(): Promise<PolicyConfig | null> {
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      // Handle specific error codes
       if (response.status === 401) {
-        logger.error("policy-fetcher", "Invalid or revoked ingest key (401)");
+        logger.error("policy-fetcher", "Unauthorized (401)");
+        return null;
+      } else if (response.status === 403) {
+        logger.error("policy-fetcher", "Forbidden (403)");
         return null;
       } else if (response.status === 500) {
         logger.error("policy-fetcher", "Server error (500)");

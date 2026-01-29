@@ -3,6 +3,21 @@ import { DRY_RUN } from "./config";
 import { getConfig } from "./config-storage";
 import { logger } from "./lib/logger";
 
+function getErrorMessageForCode(code: string): string {
+  switch (code) {
+    case "ORG_REQUIRED":
+      return "You must be in an organization. Contact your admin.";
+    case "LICENSE_REQUIRED":
+      return "Your account is not licensed. Contact your admin.";
+    case "MEMBERSHIP_REQUIRED":
+      return "Your membership was revoked. Contact your admin.";
+    case "DEVICE_ORG_MISMATCH":
+      return "Device is already registered to another org.";
+    default:
+      return "Not authorized.";
+  }
+}
+
 const TIMEOUT_MS = 5000;
 const MAX_RETRIES = 3;
 const INITIAL_BACKOFF_MS = 1000;
@@ -16,36 +31,35 @@ export interface SendResult {
   success: boolean;
   error?: string;
   statusCode?: number;
+  /** Machine-readable code from backend (e.g. ORG_REQUIRED, LICENSE_REQUIRED, DEVICE_ORG_MISMATCH) */
+  errorCode?: string;
 }
 
-export async function sendEvents(payload: QueuePayload, retryCount = 0): Promise<SendResult> {
+export async function sendEvents(
+  payload: QueuePayload,
+  bearerToken: string | null,
+  retryCount = 0
+): Promise<SendResult> {
   if (DRY_RUN) {
     logger.log("sender", "DRY_RUN: Would send payload:", payload);
-    // In DRY_RUN mode, we treat this as success
-    // Background script will handle keeping events in queue
     return { success: true };
   }
 
-  // Load config from storage
-  const config = await getConfig();
-
-  // Check for ingest key
-  if (!config.ingestKey) {
-    logger.warn("sender", "Ingest key not configured, skipping send");
+  if (!bearerToken) {
     return {
       success: false,
-      error: "Missing ingest key. Configure in Options.",
+      error: "Not signed in. Sign in to send events.",
     };
   }
 
-  // Build URL
-  const baseUrl = config.baseUrl.replace(/\/$/, ""); // Remove trailing slash
+  const config = await getConfig();
+  const baseUrl = config.baseUrl.replace(/\/$/, "");
   const url = `${baseUrl}/ingest`;
 
   try {
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
-      "X-INGEST-KEY": config.ingestKey,
+      Authorization: `Bearer ${bearerToken}`,
     };
 
     const controller = new AbortController();
@@ -61,20 +75,36 @@ export async function sendEvents(payload: QueuePayload, retryCount = 0): Promise
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      // Handle specific error codes
+      let body: { code?: string; error?: string; message?: string } = {};
+      try {
+        body = (await response.json()) as typeof body;
+      } catch {
+        // ignore
+      }
+      const errorCode = body?.code;
+
       if (response.status === 401) {
-        logger.error("sender", "Invalid or revoked ingest key (401)");
+        logger.error("sender", "Unauthorized (401)");
         return {
           success: false,
-          error: "Invalid or revoked ingest key.",
+          error: "Session expired or invalid. Sign in again.",
           statusCode: 401,
+        };
+      } else if (response.status === 403) {
+        logger.error("sender", "Forbidden (403)", errorCode ?? "");
+        return {
+          success: false,
+          error: errorCode ? getErrorMessageForCode(errorCode) : "Not authorized.",
+          statusCode: 403,
+          errorCode: errorCode ?? undefined,
         };
       } else if (response.status === 409) {
         logger.error("sender", "Device org mismatch (409)");
         return {
           success: false,
-          error: "Device is already registered to a different org.",
+          error: "Device is already registered to another org.",
           statusCode: 409,
+          errorCode: errorCode ?? "DEVICE_ORG_MISMATCH",
         };
       } else if (response.status === 413) {
         logger.error("sender", "Payload too large (413)");
