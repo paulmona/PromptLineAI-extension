@@ -4,15 +4,14 @@
  * Publishable key and sync host are injected at build time (see scripts/build.mjs).
  */
 import { createClerkClient } from "@clerk/chrome-extension/background";
+import { CLERK_PUBLISHABLE_KEY, CLERK_SYNC_HOST } from "./env.generated";
 import { logger } from "./lib/logger";
 
-declare const __CLERK_PUBLISHABLE_KEY__: string;
-declare const __CLERK_SYNC_HOST__: string;
+const PUBLISHABLE_KEY = CLERK_PUBLISHABLE_KEY;
+const SYNC_HOST = CLERK_SYNC_HOST;
 
-const PUBLISHABLE_KEY =
-  typeof __CLERK_PUBLISHABLE_KEY__ !== "undefined" ? __CLERK_PUBLISHABLE_KEY__ : "";
-const SYNC_HOST =
-  typeof __CLERK_SYNC_HOST__ !== "undefined" ? __CLERK_SYNC_HOST__ : "";
+// One-time diagnostic: service worker console shows key presence (remove after confirming)
+logger.log("clerk-auth", "Publishable key at load:", PUBLISHABLE_KEY.length ? `length ${PUBLISHABLE_KEY.length}` : "empty");
 
 export function getClerkPublishableKey(): string {
   return PUBLISHABLE_KEY;

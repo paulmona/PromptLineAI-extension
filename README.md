@@ -38,6 +38,23 @@ pnpm build
 
 This will create a `dist/` directory with all required files.
 
+### Building with Clerk
+
+The extension uses Clerk for authentication. Set these environment variables via `export` before running the build or dev server:
+
+- **CLERK_PUBLISHABLE_KEY** (required for auth): Your Clerk publishable key (e.g. `pk_test_...` or `pk_live_...`), same as your backend.
+- **CLERK_SYNC_HOST** (optional): Origin of your sync-host sign-in page (e.g. `http://127.0.0.1:8787`) so the popup can open "Open sync host to sign in".
+
+Example:
+
+```bash
+export CLERK_PUBLISHABLE_KEY=pk_test_xxxx
+export CLERK_SYNC_HOST=http://127.0.0.1:8787
+pnpm build
+```
+
+If the key is not set, the build will log a warning and the extension will show "Clerk Publishable Key Not Configured" until you rebuild with the key set.
+
 ### Development (Watch Mode)
 
 ```bash
