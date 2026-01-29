@@ -6,7 +6,31 @@ const LAST_INGEST_STATUS_KEY = "last_ingest_status";
 interface LastIngestStatus {
   success: boolean;
   error?: string;
+  errorCode?: string;
   timestamp: number;
+}
+
+interface AuthStateForDisplay {
+  signedIn: boolean;
+  userDisplay?: string;
+  orgDisplay?: string;
+  syncHostUrl?: string;
+}
+
+/** Path on the sync host that serves the extension sign-in page (backend GET /sync-host). */
+const SYNC_HOST_SIGN_IN_PATH = "/sync-host";
+
+/**
+ * Derive the URL to open when the user clicks "Open sync host to sign in".
+ * Treats syncHostUrl as the backend origin; returns origin + /sync-host so the tab loads the sign-in page.
+ */
+function getSyncHostSignInUrl(syncHostUrl: string): string {
+  try {
+    const origin = new URL(syncHostUrl).origin;
+    return `${origin.replace(/\/$/, "")}${SYNC_HOST_SIGN_IN_PATH}`;
+  } catch {
+    return `${syncHostUrl.replace(/\/$/, "")}${SYNC_HOST_SIGN_IN_PATH}`;
+  }
 }
 
 /**
@@ -34,34 +58,103 @@ function formatTimestamp(timestamp: number): string {
 }
 
 /**
+ * User-facing message for backend error codes
+ */
+function getGuidanceForErrorCode(code: string): string {
+  switch (code) {
+    case "ORG_REQUIRED":
+      return "You must be in an organization. Contact your admin.";
+    case "LICENSE_REQUIRED":
+      return "Your account is not licensed. Contact your admin.";
+    case "MEMBERSHIP_REQUIRED":
+      return "Your membership was revoked. Contact your admin.";
+    case "DEVICE_ORG_MISMATCH":
+      return "Device already used in another org.";
+    default:
+      return "";
+  }
+}
+
+/**
+ * Load and display auth state (getAuthState from background; never receives tokens)
+ */
+async function renderAuth(): Promise<void> {
+  const authStateEl = document.getElementById("auth-state");
+  const authActionsEl = document.getElementById("auth-actions");
+  if (!authStateEl || !authActionsEl) return;
+
+  try {
+    const state = (await chrome.runtime.sendMessage({ type: "getAuthState" })) as AuthStateForDisplay | undefined;
+    if (!state) {
+      authStateEl.textContent = "Not signed in";
+      authStateEl.className = "status-value";
+      authActionsEl.innerHTML = "";
+      return;
+    }
+
+    if (state.signedIn) {
+      const display = state.orgDisplay
+        ? `${state.userDisplay ?? "User"} (${state.orgDisplay})`
+        : (state.userDisplay ?? "User");
+      authStateEl.textContent = display;
+      authStateEl.className = "status-value success";
+      authActionsEl.className = "";
+      authActionsEl.innerHTML = '<button type="button" class="auth-link secondary" id="sign-out-btn">Sign out</button>';
+      const signOutBtn = document.getElementById("sign-out-btn");
+      if (signOutBtn) {
+        signOutBtn.addEventListener("click", async () => {
+          await chrome.runtime.sendMessage({ type: "signOut" });
+          await renderAuth();
+        });
+      }
+    } else {
+      authStateEl.textContent = "Not signed in";
+      authStateEl.className = "status-value";
+      authActionsEl.className = "";
+      if (state.syncHostUrl) {
+        authActionsEl.innerHTML = '<a href="#" class="auth-link" id="open-sync-host-link">Open sync host to sign in</a>';
+        const link = document.getElementById("open-sync-host-link");
+        if (link) {
+          link.addEventListener("click", (e) => {
+            e.preventDefault();
+            const openUrl = getSyncHostSignInUrl(state.syncHostUrl!);
+            chrome.tabs.create({ url: openUrl });
+          });
+        }
+      } else {
+        authActionsEl.innerHTML = "";
+        authActionsEl.textContent = "Configure CLERK_SYNC_HOST and rebuild the extension to get a sign-in link.";
+        authActionsEl.className = "status-value warning";
+      }
+    }
+  } catch (err) {
+    console.error("Failed to get auth state:", err);
+    authStateEl.textContent = "Not signed in";
+    authStateEl.className = "status-value";
+    authActionsEl.innerHTML = "";
+    authActionsEl.className = "";
+  }
+}
+
+/**
  * Load and display status
  */
 async function renderStatus(): Promise<void> {
+  await renderAuth();
+
   const backendUrlEl = document.getElementById("backend-url");
-  const ingestKeyStatusEl = document.getElementById("ingest-key-status");
   const lastIngestStatusEl = document.getElementById("last-ingest-status");
   const lastPolicyFetchEl = document.getElementById("last-policy-fetch");
   const policyConfigEl = document.getElementById("policy-config");
 
   try {
-    // Load config
     const config = await getConfig();
-    
+
     if (backendUrlEl) {
       backendUrlEl.textContent = truncateUrl(config.baseUrl);
     }
 
-    if (ingestKeyStatusEl) {
-      if (config.ingestKey) {
-        ingestKeyStatusEl.textContent = "✓ Configured";
-        ingestKeyStatusEl.className = "status-value success";
-      } else {
-        ingestKeyStatusEl.textContent = "✗ Not configured";
-        ingestKeyStatusEl.className = "status-value error";
-      }
-    }
-
-    // Load last ingest status
+    // Load last ingest status (optionally surface errorCode as guidance)
     if (lastIngestStatusEl) {
       const result = await chrome.storage.local.get(LAST_INGEST_STATUS_KEY);
       const lastStatus = result[LAST_INGEST_STATUS_KEY] as LastIngestStatus | undefined;
@@ -73,7 +166,8 @@ async function renderStatus(): Promise<void> {
         lastIngestStatusEl.textContent = `Success (${formatTimestamp(lastStatus.timestamp)})`;
         lastIngestStatusEl.className = "status-value success";
       } else {
-        const errorMsg = lastStatus.error || "Unknown error";
+        const guidance = lastStatus.errorCode ? getGuidanceForErrorCode(lastStatus.errorCode) : null;
+        const errorMsg = guidance || lastStatus.error || "Unknown error";
         lastIngestStatusEl.textContent = `Error: ${errorMsg}`;
         lastIngestStatusEl.className = "status-value error";
       }
@@ -107,7 +201,6 @@ async function renderStatus(): Promise<void> {
   } catch (error) {
     console.error("Failed to load status:", error);
     if (backendUrlEl) backendUrlEl.textContent = "Error loading";
-    if (ingestKeyStatusEl) ingestKeyStatusEl.textContent = "Error loading";
     if (lastPolicyFetchEl) lastPolicyFetchEl.textContent = "Error loading";
     if (policyConfigEl) policyConfigEl.textContent = "Error loading";
   }
@@ -135,10 +228,9 @@ async function render(): Promise<void> {
     return;
   }
 
-  // Setup options link
   setupOptionsLink();
 
-  // Render status
+  // Render auth state and status (auth first so "Open sync host" / Sign out appear)
   await renderStatus();
 
   try {

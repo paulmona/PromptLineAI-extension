@@ -4,7 +4,8 @@
   "version": "0.1.0",
   "description": "Detect AI tool usage events on ChatGPT",
   "permissions": [
-    "storage"
+    "storage",
+    "tabs"
   ],
   "host_permissions": [
     "https://chat.openai.com/*",
