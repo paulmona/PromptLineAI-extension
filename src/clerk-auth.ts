@@ -80,6 +80,10 @@ export interface AuthStateForDisplay {
   orgDisplay?: string;
   /** Sync host URL for "Open sync host to sign in" link (no token). */
   syncHostUrl?: string;
+  /** True when Clerk user is signed in but current org is not allowed for the extension (e.g. Platform Admin). */
+  extensionNotAllowedForOrg?: boolean;
+  /** User-facing message when extensionNotAllowedForOrg is true. */
+  extensionNotAllowedMessage?: string;
 }
 
 /**

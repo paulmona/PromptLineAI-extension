@@ -15,6 +15,8 @@ interface AuthStateForDisplay {
   userDisplay?: string;
   orgDisplay?: string;
   syncHostUrl?: string;
+  extensionNotAllowedForOrg?: boolean;
+  extensionNotAllowedMessage?: string;
 }
 
 /** Path on the sync host that serves the extension sign-in page (backend GET /sync-host). */
@@ -70,6 +72,8 @@ function getGuidanceForErrorCode(code: string): string {
       return "Your membership was revoked. Contact your admin.";
     case "DEVICE_ORG_MISMATCH":
       return "Device already used in another org.";
+    case "EXTENSION_NOT_ALLOWED_FOR_PLATFORM_ADMIN":
+      return "This extension cannot be used with the Platform Admin organization. Sign in with a customer org or use a different account.";
     default:
       return "";
   }
@@ -98,6 +102,20 @@ async function renderAuth(): Promise<void> {
         : (state.userDisplay ?? "User");
       authStateEl.textContent = display;
       authStateEl.className = "status-value success";
+      authActionsEl.className = "";
+      authActionsEl.innerHTML = '<button type="button" class="auth-link secondary" id="sign-out-btn">Sign out</button>';
+      const signOutBtn = document.getElementById("sign-out-btn");
+      if (signOutBtn) {
+        signOutBtn.addEventListener("click", async () => {
+          await chrome.runtime.sendMessage({ type: "signOut" });
+          await renderAuth();
+        });
+      }
+    } else if (state.extensionNotAllowedForOrg === true) {
+      authStateEl.textContent =
+        state.extensionNotAllowedMessage ??
+        "This extension cannot be used with the Platform Admin organization. Sign in with a customer org or use a different account.";
+      authStateEl.className = "status-value error";
       authActionsEl.className = "";
       authActionsEl.innerHTML = '<button type="button" class="auth-link secondary" id="sign-out-btn">Sign out</button>';
       const signOutBtn = document.getElementById("sign-out-btn");

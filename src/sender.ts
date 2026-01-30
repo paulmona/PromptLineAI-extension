@@ -13,6 +13,8 @@ function getErrorMessageForCode(code: string): string {
       return "Your membership was revoked. Contact your admin.";
     case "DEVICE_ORG_MISMATCH":
       return "Device is already registered to another org.";
+    case "EXTENSION_NOT_ALLOWED_FOR_PLATFORM_ADMIN":
+      return "This extension cannot be used with the Platform Admin organization. Sign in with a customer org or use a different account.";
     default:
       return "Not authorized.";
   }

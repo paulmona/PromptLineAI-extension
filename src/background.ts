@@ -3,7 +3,7 @@ import { getDeviceId, getQueue, popBatch, setQueue } from "./storage";
 import { sendEvents, SendResult } from "./sender";
 import { getConfig, getPollingInterval, getPolicyConfig, setPolicyConfig } from "./config-storage";
 import { fetchPolicyConfig } from "./policy-fetcher";
-import { getClerkToken, getAuthStateForDisplay, clerkSignOut } from "./clerk-auth";
+import { getClerkToken, getAuthStateForDisplay, clerkSignOut, type AuthStateForDisplay } from "./clerk-auth";
 import { FLUSH_INTERVAL_MS, BATCH_SIZE, MAX_QUEUE_SIZE, DRY_RUN } from "./config";
 import { logger } from "./lib/logger";
 
@@ -29,6 +29,61 @@ async function storeIngestStatus(result: SendResult): Promise<void> {
   await chrome.storage.local.set({ [LAST_INGEST_STATUS_KEY]: status });
 }
 
+const EXTENSION_NOT_ALLOWED_MESSAGE =
+  "This extension cannot be used with the Platform Admin organization. Sign in with a customer org or use a different account.";
+
+/** Cached result of extension-allowed check: null = unknown, true = not allowed (Platform Admin), false = allowed. */
+let extensionNotAllowedCached: boolean | null = null;
+
+/**
+ * Resolve auth state for display: after Clerk says signed in, call GET /config.
+ * If 403 with EXTENSION_NOT_ALLOWED_FOR_PLATFORM_ADMIN, return extension-not-allowed state.
+ */
+async function resolveAuthStateForDisplay(): Promise<AuthStateForDisplay> {
+  const state = await getAuthStateForDisplay();
+  if (!state.signedIn) {
+    extensionNotAllowedCached = null;
+    return state;
+  }
+
+  const token = await getClerkToken();
+  if (!token) return state;
+
+  try {
+    const config = await getConfig();
+    const baseUrl = config.baseUrl.replace(/\/$/, "");
+    const url = `${baseUrl}/config`;
+    const response = await fetch(url, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (response.status === 403) {
+      let body: { code?: string } = {};
+      try {
+        body = (await response.json()) as { code?: string };
+      } catch {
+        // ignore parse error
+      }
+      if (body.code === "EXTENSION_NOT_ALLOWED_FOR_PLATFORM_ADMIN") {
+        extensionNotAllowedCached = true;
+        return {
+          signedIn: false,
+          extensionNotAllowedForOrg: true,
+          extensionNotAllowedMessage: EXTENSION_NOT_ALLOWED_MESSAGE,
+          userDisplay: state.userDisplay,
+          orgDisplay: state.orgDisplay,
+          syncHostUrl: state.syncHostUrl,
+        };
+      }
+    }
+    extensionNotAllowedCached = false; // GET /config succeeded or 403 was other code
+  } catch (err) {
+    logger.warn("background", "Extension-allowed check failed, treating as signed in", err);
+  }
+  return state;
+}
+
 let flushLock = false;
 let policyPollingInterval: number | null = null;
 
@@ -44,7 +99,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true;
   }
   if (message.type === "getAuthState") {
-    getAuthStateForDisplay()
+    resolveAuthStateForDisplay()
       .then((state) => sendResponse(state))
       .catch((err) => {
         logger.error("background", "getAuthState failed:", err);
@@ -54,7 +109,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
   if (message.type === "signOut") {
     clerkSignOut()
-      .then(() => sendResponse({ success: true }))
+      .then(() => {
+        extensionNotAllowedCached = null;
+        sendResponse({ success: true });
+      })
       .catch((err) => {
         logger.error("background", "signOut failed:", err);
         sendResponse({ success: false });
@@ -97,6 +155,17 @@ async function flushEvents(): Promise<void> {
 
   flushLock = true;
   try {
+    // Skip sending when we know the current org is not allowed for the extension (e.g. Platform Admin)
+    if (extensionNotAllowedCached === true) {
+      await storeIngestStatus({
+        success: false,
+        error: EXTENSION_NOT_ALLOWED_MESSAGE,
+        errorCode: "EXTENSION_NOT_ALLOWED_FOR_PLATFORM_ADMIN",
+      });
+      flushLock = false;
+      return;
+    }
+
     // Get token per request, retry once on failure
     let token = await getClerkToken(true);
     if (!token) {
@@ -132,6 +201,14 @@ async function flushEvents(): Promise<void> {
     };
 
     const result = await sendEvents(payload, token);
+
+    // Cache extension-not-allowed so we skip sendEvents on subsequent flushes
+    if (
+      result.statusCode === 403 &&
+      result.errorCode === "EXTENSION_NOT_ALLOWED_FOR_PLATFORM_ADMIN"
+    ) {
+      extensionNotAllowedCached = true;
+    }
 
     // Store status for popup display
     await storeIngestStatus(result);
