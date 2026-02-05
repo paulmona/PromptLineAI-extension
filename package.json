@@ -5,7 +5,16 @@
   "type": "module",
   "scripts": {
     "build": "node scripts/build.mjs",
-    "dev": "node scripts/build.mjs --watch"
+    "dev": "node scripts/build.mjs --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:ui": "vitest --ui",
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration",
+    "test:adapters": "vitest run tests/adapters",
+    "test:e2e": "playwright test",
+    "test:coverage": "vitest run --coverage",
+    "coverage:view": "open coverage/index.html"
   },
   "keywords": [
     "chrome-extension",
@@ -16,8 +25,14 @@
   "license": "MIT",
   "devDependencies": {
     "@types/chrome": "^0.0.268",
+    "@vitest/coverage-v8": "^2.1.0",
+    "@vitest/ui": "^2.1.0",
     "esbuild": "^0.24.0",
-    "typescript": "^5.6.3"
+    "happy-dom": "^15.0.0",
+    "playwright": "^1.50.0",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.0",
+    "vitest-chrome": "^0.1.0"
   },
   "dependencies": {
     "@clerk/chrome-extension": "^2.9.0"
