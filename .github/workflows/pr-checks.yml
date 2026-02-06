@@ -38,9 +38,14 @@ jobs:
       - name: Generate coverage summary
         id: coverage
         run: |
-          COVERAGE=$(pnpm exec vitest run --coverage --reporter=json 2>/dev/null | jq -r '.coverageMap.total.statements.pct' || echo "N/A")
-          echo "coverage=$COVERAGE" >> $GITHUB_OUTPUT
-          echo "Coverage: $COVERAGE%"
+          if [ -f coverage/coverage-summary.json ]; then
+            COVERAGE=$(jq -r '.total.statements.pct' coverage/coverage-summary.json)
+            echo "coverage=$COVERAGE" >> $GITHUB_OUTPUT
+            echo "Coverage: $COVERAGE%"
+          else
+            echo "coverage=N/A" >> $GITHUB_OUTPUT
+            echo "Coverage: N/A"
+          fi
 
       - name: Coverage comment
         uses: actions/github-script@v7
