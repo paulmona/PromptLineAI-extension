@@ -1,5 +1,10 @@
 # PromptLineAI Extension
 
+[![Tests](https://github.com/PromptLineAI/extension/actions/workflows/test.yml/badge.svg)](https://github.com/PromptLineAI/extension/actions/workflows/test.yml)
+[![Coverage](https://img.shields.io/badge/coverage-80%25-green.svg)](https://github.com/PromptLineAI/extension/tree/main/coverage)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Chrome Extension](https://img.shields.io/badge/chrome-extension-blue.svg)](https://developer.chrome.com/docs/extensions/)
+
 A Chrome (Chromium) Manifest V3 extension that detects AI tool usage on ChatGPT and logs high-level events without capturing content.
 
 ## Features
@@ -131,6 +136,58 @@ Output files in `dist/`:
 - `manifest.json`
 - `popup.html`
 - `icons/` (if provided)
+
+## Testing
+
+### Running Tests
+
+```bash
+# Run all tests
+pnpm test
+
+# Run tests in watch mode
+pnpm test:watch
+
+# Run tests with coverage
+pnpm test:coverage
+
+# Run specific test suites
+pnpm test:unit          # Unit tests only
+pnpm test:integration   # Integration tests only
+pnpm test:adapters      # Adapter tests (deferred)
+
+# Run E2E tests (Playwright)
+pnpm test:e2e
+```
+
+### Test Coverage
+
+Current test coverage:
+- **Core utilities**: 100% (uuid, logger)
+- **Storage layer**: 100% (queue management, config storage)
+- **Network layer**: 86% (sender, policy-fetcher)
+- **Integration**: 7 tests validating module interactions
+
+### Test Structure
+
+```
+/tests
+  /unit              # Unit tests for individual modules
+  /integration       # Integration tests for module interactions
+  /adapters          # Adapter tests (see tests/adapters/README.md)
+  /e2e               # End-to-end tests (Playwright)
+  /fixtures          # Test fixtures (events, policies, DOM)
+  /helpers           # Test helpers (chrome-api, dom-setup)
+  setup.ts           # Test setup (custom chrome mocks)
+```
+
+### CI/CD
+
+All tests run automatically on:
+- Push to `main`, `develop`, or `feature/*` branches
+- Pull requests to `main` or `develop`
+
+See [.github/workflows/](.github/workflows/) for workflow configurations.
 
 ## License
 
