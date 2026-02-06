@@ -1,6 +1,6 @@
 // Testing Strategy Design Document: tests/fixtures/policies.ts
 // Mock policy configuration fixtures for testing
-// Generated: 2026-02-05
+// Updated: 2026-02-05
 
 import type { PolicyConfig } from '../../src/types';
 
@@ -10,25 +10,29 @@ import type { PolicyConfig } from '../../src/types';
  */
 export function createMockPolicyAllEnabled(): PolicyConfig {
   return {
-    enabled_tools: ['chatgpt', 'gemini', 'claude', 'copilot'],
-    log_file_names: true,
-    max_queue_size: 100,
-    flush_interval_ms: 30000,
-    last_updated: new Date('2026-01-01T00:00:00.000Z').toISOString(),
+    llms: {
+      chatgpt: true,
+      gemini: true,
+    },
+    fileUpload: {
+      logFileNames: true,
+    },
   };
 }
 
 /**
- * Creates a mock policy with specific tools disabled
+ * Creates a mock policy with specific tool disabled
  * Used in: Integration tests (policy enforcement)
  */
-export function createMockPolicyWithDisabledTool(disabledTool: string): PolicyConfig {
+export function createMockPolicyWithDisabledTool(disabledTool: 'chatgpt' | 'gemini'): PolicyConfig {
   return {
-    enabled_tools: ['chatgpt', 'gemini', 'claude', 'copilot'].filter(tool => tool !== disabledTool),
-    log_file_names: true,
-    max_queue_size: 100,
-    flush_interval_ms: 30000,
-    last_updated: new Date('2026-01-01T00:00:00.000Z').toISOString(),
+    llms: {
+      chatgpt: disabledTool !== 'chatgpt',
+      gemini: disabledTool !== 'gemini',
+    },
+    fileUpload: {
+      logFileNames: true,
+    },
   };
 }
 
@@ -38,24 +42,28 @@ export function createMockPolicyWithDisabledTool(disabledTool: string): PolicyCo
  */
 export function createMockPolicyNoFileNames(): PolicyConfig {
   return {
-    enabled_tools: ['chatgpt', 'gemini', 'claude', 'copilot'],
-    log_file_names: false,
-    max_queue_size: 100,
-    flush_interval_ms: 30000,
-    last_updated: new Date('2026-01-01T00:00:00.000Z').toISOString(),
+    llms: {
+      chatgpt: true,
+      gemini: true,
+    },
+    fileUpload: {
+      logFileNames: false,
+    },
   };
 }
 
 /**
- * Creates a mock policy with custom queue settings
- * Used in: Integration tests (queue management)
+ * Creates a mock policy with all tools disabled
+ * Used in: Integration tests (policy enforcement)
  */
-export function createMockPolicyCustomQueue(maxSize: number, flushInterval: number): PolicyConfig {
+export function createMockPolicyAllDisabled(): PolicyConfig {
   return {
-    enabled_tools: ['chatgpt', 'gemini', 'claude', 'copilot'],
-    log_file_names: true,
-    max_queue_size: maxSize,
-    flush_interval_ms: flushInterval,
-    last_updated: new Date('2026-01-01T00:00:00.000Z').toISOString(),
+    llms: {
+      chatgpt: false,
+      gemini: false,
+    },
+    fileUpload: {
+      logFileNames: false,
+    },
   };
 }
