@@ -35,6 +35,7 @@ export interface SendResult {
   statusCode?: number;
   /** Machine-readable code from backend (e.g. ORG_REQUIRED, LICENSE_REQUIRED, DEVICE_ORG_MISMATCH) */
   errorCode?: string;
+  timestamp?: number;
 }
 
 export async function sendEvents(
@@ -129,7 +130,7 @@ export async function sendEvents(
             `Rate limited (429), retrying after ${backoffMs}ms (attempt ${retryCount + 1}/${MAX_RETRIES})`
           );
           await new Promise((resolve) => setTimeout(resolve, backoffMs));
-          return sendEvents(payload, retryCount + 1);
+          return sendEvents(payload, bearerToken, retryCount + 1);
         } else {
           logger.warn("sender", "Rate limited (429), max retries exceeded");
           return {
