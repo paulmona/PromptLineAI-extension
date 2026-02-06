@@ -72,17 +72,22 @@ export function createMockFileSelectedEvent(overrides?: Partial<Event>): Event {
  * Used in: Integration tests (queue management), Storage tests
  */
 export function createMockEventBatch(count: number): Event[] {
-  return Array.from({ length: count }, (_, i) => ({
-    id: `test-event-${String(i).padStart(3, '0')}`,
-    ts: new Date(`2026-01-01T00:${String(i).padStart(2, '0')}:00.000Z`).toISOString(),
-    tool: 'chatgpt' as const,
-    event_type: 'prompt_submit' as const,
-    url_host: 'chat.openai.com',
-    file_ext: null,
-    file_size_kb: null,
-    file_name: null,
-    prompt_len_bucket: '200-1000',
-    has_code_block: false,
-    paste_detected: false,
-  }));
+  return Array.from({ length: count }, (_, i) => {
+    // For timestamps, use hours instead of minutes to avoid exceeding 60
+    const hours = Math.floor(i / 60);
+    const minutes = i % 60;
+    return {
+      id: `test-event-${String(i).padStart(3, '0')}`,
+      ts: new Date(`2026-01-01T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00.000Z`).toISOString(),
+      tool: 'chatgpt' as const,
+      event_type: 'prompt_submit' as const,
+      url_host: 'chat.openai.com',
+      file_ext: null,
+      file_size_kb: null,
+      file_name: null,
+      prompt_len_bucket: '200-1000',
+      has_code_block: false,
+      paste_detected: false,
+    };
+  });
 }
