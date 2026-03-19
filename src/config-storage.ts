@@ -29,7 +29,7 @@ let cacheValid = false;
 /**
  * Get storage API (prefer sync, fallback to local)
  */
-function getStorage(): typeof chrome.storage.sync {
+function getStorage(): chrome.storage.SyncStorageArea | chrome.storage.LocalStorageArea {
   // Check if sync is available (may not be in some contexts)
   try {
     if (chrome.storage?.sync) {
@@ -188,15 +188,17 @@ export async function setPollingInterval(ms: number): Promise<void> {
 }
 
 // Listen for storage changes to invalidate cache
-chrome.storage.onChanged.addListener((changes, areaName) => {
-  if (
-    areaName === "sync" ||
-    areaName === "local" ||
-    changes[CONFIG_BASE_URL_KEY] ||
-    changes[CONFIG_DEVICE_NAME_KEY]
-  ) {
-    cacheValid = false;
-    cachedConfig = null;
-    logger.log("config-storage", "Cache invalidated due to storage change");
-  }
-});
+if (typeof chrome !== 'undefined' && chrome.storage) {
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (
+      areaName === "sync" ||
+      areaName === "local" ||
+      changes[CONFIG_BASE_URL_KEY] ||
+      changes[CONFIG_DEVICE_NAME_KEY]
+    ) {
+      cacheValid = false;
+      cachedConfig = null;
+      logger.log("config-storage", "Cache invalidated due to storage change");
+    }
+  });
+}

@@ -251,26 +251,27 @@ export function initChatGPT(onEvent: EventCallback): void {
   function setupFileInputListeners(): void {
     // Find all file inputs
     const fileInputs = document.querySelectorAll('input[type="file"]');
-    fileInputs.forEach((input) => {
+    fileInputs.forEach((element) => {
+      const input = element as HTMLInputElement;
       // Only attach listener if we haven't already attached one to this input
       if (!fileInputsWithListeners.has(input)) {
         fileInputsWithListeners.add(input);
-        
+
         input.addEventListener("change", async (e) => {
           const target = e.target as HTMLInputElement;
           const files = target.files;
           if (files && files.length > 0) {
             const file = files[0];
-            const fileExt = file.name.split(".").pop() || null;
+            const fileExt = file.name.split(".").pop() || undefined;
             const fileSizeKb = Math.round(file.size / 1024);
             logger.log("chatgpt-adapter", "File selected:", file.name, fileSizeKb, "KB");
-            
+
             // Check policy for file name logging
             const logFileName = await shouldLogFileName();
-            onEvent("file_selected", { 
-              file_ext: fileExt || undefined, 
-              file_size_kb: fileSizeKb, 
-              file_name: logFileName ? file.name : null 
+            onEvent("file_selected", {
+              file_ext: fileExt,
+              file_size_kb: fileSizeKb,
+              file_name: logFileName ? file.name : undefined
             });
           }
         });
