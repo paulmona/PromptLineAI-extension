@@ -1,5 +1,10 @@
 # PromptLineAI Extension
 
+> **Status:** proof of concept, built January to February 2026, now shelved.
+> PromptLineAI gives an organization visibility into how its people use AI
+> tools without capturing what they type. This is the browser extension; events
+> go to the [backend and admin dashboard](https://github.com/paulmona/PromptLineAI-BackendAPI).
+
 A Chrome (Chromium) Manifest V3 extension that detects AI tool usage on ChatGPT and logs high-level events without capturing content.
 
 ## Features
